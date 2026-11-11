@@ -1,7 +1,8 @@
 'use client';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { quoteSurvey, SURVEY_RULES, surveyBand, type SurveyDetail, type SurveyQuoteResponse } from '@tembo/shared';
+import { quoteSurvey, SURVEY_RULES, surveyBand, type QuestionInput, type SurveyDetail, type SurveyQuoteResponse } from '@tembo/shared';
+import { newQuestion, QuestionBuilder } from '@/components/survey/builder';
 import { api, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
 import { Button, Card, ErrorText, Field, inputCls, Spinner } from '@/components/ui';
@@ -18,8 +19,10 @@ function NewSurvey() {
   const [info, setInfo] = useState<SurveyQuoteResponse | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [questionCount, setQuestionCount] = useState(10);
+  const [questions, setQuestions] = useState<QuestionInput[]>(() => [newQuestion()]);
+  const questionCount = questions.length;
   const [reward, setReward] = useState(5);
+  const [rewardTouched, setRewardTouched] = useState(false);
   const [quota, setQuota] = useState(30);
   const [closesAt, setClosesAt] = useState(() => toLocalInput(new Date(Date.now() + 14 * 86_400_000)));
   const [requestSubsidy, setRequestSubsidy] = useState(false);
@@ -43,18 +46,20 @@ function NewSurvey() {
   const totalPay = (q?.postFee ?? 0) + ownerContribution;
   const leftForFriends = q ? Math.max(0, q.maxOwnerContribution - ownerContribution) : 0;
 
-  function onQuestions(n: number) {
-    setQuestionCount(n);
-    const b = surveyBand(n);
-    if (b) setReward(b.suggestedReward);
-  }
+  // ปรับรางวัลแนะนำตามจำนวนข้อ จนกว่าผู้ใช้จะแก้เอง
+  useEffect(() => {
+    const b = surveyBand(questionCount);
+    if (b && !rewardTouched) setReward(b.suggestedReward);
+    else if (b && reward < b.minReward) setReward(b.minReward);
+  }, [questionCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
       const s = await post<SurveyDetail>('/surveys', {
-        title, description: description || undefined, questionCount, rewardPerResponse: reward, quota,
+        title, description: description || undefined, questions, rewardPerResponse: reward, quota,
         closesAt: new Date(closesAt).toISOString(), ownerContribution, requestSubsidy,
       });
       router.replace(`/surveys/${s.id}`);
@@ -73,11 +78,8 @@ function NewSurvey() {
             <textarea className={inputCls} rows={3} maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ใครควรตอบ ใช้เวลากี่นาที ข้อมูลจะถูกใช้อย่างไร" />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="จำนวนข้อ" hint={`สูงสุด ${SURVEY_RULES.MAX_QUESTIONS} ข้อ`}>
-              <input type="number" className={inputCls} min={1} max={SURVEY_RULES.MAX_QUESTIONS} required value={questionCount} onChange={(e) => onQuestions(Number(e.target.value))} />
-            </Field>
-            <Field label="รางวัล/คน (Coin)" hint={band ? `ขั้นต่ำ ${band.minReward} · แนะนำ ${band.suggestedReward}` : undefined}>
-              <input type="number" className={inputCls} min={band?.minReward ?? 1} max={SURVEY_RULES.MAX_REWARD} required value={reward} onChange={(e) => setReward(Number(e.target.value))} />
+            <Field label="รางวัล/คน (Coin)" hint={band ? `${questionCount} ข้อ · ขั้นต่ำ ${band.minReward} · แนะนำ ${band.suggestedReward}` : undefined}>
+              <input type="number" className={inputCls} min={band?.minReward ?? 1} max={SURVEY_RULES.MAX_REWARD} required value={reward} onChange={(e) => { setRewardTouched(true); setReward(Number(e.target.value)); }} />
             </Field>
             <Field label="ต้องการผู้ตอบ (คน)">
               <input type="number" className={inputCls} min={1} max={SURVEY_RULES.MAX_QUOTA} required value={quota} onChange={(e) => setQuota(Number(e.target.value))} />
@@ -86,6 +88,14 @@ function NewSurvey() {
               <input type="datetime-local" className={inputCls} required value={closesAt} onChange={(e) => setClosesAt(e.target.value)} />
             </Field>
           </div>
+        </Card>
+
+        <Card className="space-y-4 p-6">
+          <div>
+            <h3 className="font-display font-semibold">คำถาม ({questionCount}/{SURVEY_RULES.MAX_QUESTIONS})</h3>
+            <p className="text-sm text-muted-foreground">จำนวนข้อมีผลกับรางวัลขั้นต่ำและค่าโพสต์</p>
+          </div>
+          <QuestionBuilder value={questions} onChange={setQuestions} />
         </Card>
 
         <Card className="space-y-4 p-6">

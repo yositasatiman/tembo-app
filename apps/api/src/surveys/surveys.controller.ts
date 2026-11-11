@@ -1,7 +1,8 @@
-import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   CreateSurveyInput, createSurveySchema, ReviewSubsidyInput, reviewSubsidySchema,
-  SponsorSurveyInput, sponsorSurveySchema,
+  SponsorSurveyInput, sponsorSurveySchema, SubmitAnswersInput, submitAnswersSchema,
 } from '@tembo/shared';
 import { AuthGuard, AuthUser, CurrentUser, Roles, RolesGuard } from '../common/auth';
 import { ZodPipe } from '../common/zod.pipe';
@@ -16,7 +17,7 @@ export class SurveysController {
   quote(@CurrentUser() u: AuthUser) { return this.surveys.quoteInfo(u.id); }
 
   @Get()
-  list() { return this.surveys.list(); }
+  list(@CurrentUser() u: AuthUser) { return this.surveys.list(u.id); }
 
   @Get('mine')
   mine(@CurrentUser() u: AuthUser) { return this.surveys.mine(u.id); }
@@ -39,10 +40,26 @@ export class SurveysController {
   @HttpCode(200)
   close(@CurrentUser() u: AuthUser, @Param('id') id: string) { return this.surveys.closeByOwner(u.id, id); }
 
-  /** ขั้นที่ 2: ยืนยันว่าตอบครบแล้วรับรางวัล — ขั้นที่ 3 จะเปลี่ยนเป็นส่งคำตอบจริงมาด้วย */
+  @Get(':id/form')
+  form(@CurrentUser() u: AuthUser, @Param('id') id: string) { return this.surveys.form(id, u.id); }
+
+  /** ส่งคำตอบ → ตรวจครบถ้วน → จ่ายรางวัลจาก Escrow */
   @Post(':id/responses')
   @HttpCode(200)
-  respond(@CurrentUser() u: AuthUser, @Param('id') id: string) { return this.surveys.recordResponse(u.id, id); }
+  respond(@CurrentUser() u: AuthUser, @Param('id') id: string, @Body(new ZodPipe(submitAnswersSchema)) body: SubmitAnswersInput) {
+    return this.surveys.recordResponse(u.id, id, body.answers);
+  }
+
+  @Get(':id/results')
+  results(@CurrentUser() u: AuthUser, @Param('id') id: string) { return this.surveys.results(id, u); }
+
+  @Get(':id/results.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  async csv(@CurrentUser() u: AuthUser, @Param('id') id: string, @Res({ passthrough: true }) res: Response) {
+    const { filename, content } = await this.surveys.csv(id, u);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return content;
+  }
 }
 
 @Controller('admin')

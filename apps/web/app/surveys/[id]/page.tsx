@@ -1,11 +1,11 @@
 'use client';
 import { FormEvent, use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CalendarDays, CheckCircle2, Coins, HandCoins, ListChecks, Lock, Users } from 'lucide-react';
+import { ArrowLeft, BarChart3, CalendarDays, CheckCircle2, Coins, Eye, HandCoins, ListChecks, Lock, Users } from 'lucide-react';
 import type { SurveyDetail } from '@tembo/shared';
 import { api, ApiError, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
-import { Badge, Button, Card, ErrorText, fmtDate, inputCls, Notice, Progress, Spinner, StatusBadge } from '@/components/ui';
+import { Badge, Button, buttonCls, Card, ErrorText, fmtDate, inputCls, Notice, Progress, Spinner, StatusBadge } from '@/components/ui';
 
 export default function SurveyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -70,7 +70,12 @@ function SurveyView({ id }: { id: string }) {
         <Card className="space-y-3">
           <h3 className="font-display font-semibold">ตอบแบบสอบถาม</h3>
           {s.hasResponded ? <p className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4" />คุณตอบแล้ว</p>
-            : s.canRespond ? <RespondButton s={s} onDone={done} />
+            : s.canRespond ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">{s.questionCount} ข้อ · ตอบครบรับ {s.rewardPerResponse} Coin ทันที</p>
+                <Link href={`/surveys/${s.id}/answer`} className={buttonCls('primary')}>เริ่มทำแบบสอบถาม</Link>
+              </div>
+            )
             : <p className="flex items-center gap-2 text-sm text-muted-foreground"><Lock className="size-4" />{s.respondBlockedReason}</p>}
         </Card>
       )}
@@ -92,27 +97,21 @@ function SurveyView({ id }: { id: string }) {
         {s.subsidyStatus === 'REJECTED' && s.subsidyNote && <Notice>ไม่ได้รับการสมทบ: {s.subsidyNote}</Notice>}
       </Card>
 
+      {s.isOwner && (
+        <Card className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display font-semibold">ผลลัพธ์</h3>
+            <p className="text-sm text-muted-foreground">ผู้ตอบ {s.responsesCount} คน · ดาวน์โหลดเป็น CSV ได้</p>
+          </div>
+          <div className="flex gap-2">
+            <Link href={`/surveys/${s.id}/answer`} className={buttonCls('outline', 'sm')}><Eye />ดูตัวอย่างแบบฟอร์ม</Link>
+            <Link href={`/surveys/${s.id}/results`} className={buttonCls('primary', 'sm')}><BarChart3 />ดูผลลัพธ์</Link>
+          </div>
+        </Card>
+      )}
+
       {s.status !== 'CLOSED' && s.remainingToFund > 0 && !s.hasResponded && <SponsorCard s={s} onDone={done} />}
       {s.isOwner && s.status !== 'CLOSED' && <CloseCard s={s} onDone={done} />}
-    </div>
-  );
-}
-
-function RespondButton({ s, onDone }: { s: SurveyDetail; onDone: (m: string) => void }) {
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  async function go() {
-    setError(''); setLoading(true);
-    try {
-      const r = await post<{ reward: number; balance: number }>(`/surveys/${s.id}/responses`);
-      onDone(`ได้รับ ${r.reward} Coin แล้ว (คงเหลือ ${r.balance})`);
-    } catch (e) { setError((e as Error).message); } finally { setLoading(false); }
-  }
-  return (
-    <div className="space-y-2">
-      <Button onClick={go} disabled={loading}>ฉันตอบครบแล้ว รับ {s.rewardPerResponse} Coin</Button>
-      <p className="text-xs text-muted-foreground">โหมดทดลองของขั้นที่ 2 — ขั้นที่ 3 จะเปลี่ยนเป็นแบบฟอร์มคำตอบจริง</p>
-      <ErrorText>{error}</ErrorText>
     </div>
   );
 }

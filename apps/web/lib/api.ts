@@ -2,7 +2,7 @@
 import type { MeResponse } from '@tembo/shared';
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, public errors?: Record<string, string>) { super(message); }
 }
 
 // refresh ได้ทีละครั้ง: ถ้าหลายคำขอเจอ 401 พร้อมกันจะรอผลเดียวกัน
@@ -29,7 +29,7 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = Array.isArray(body.message) ? body.message[0] : body.message;
-    throw new ApiError(res.status, msg ?? 'เกิดข้อผิดพลาด');
+    throw new ApiError(res.status, msg ?? 'เกิดข้อผิดพลาด', body.errors);
   }
   return body as T;
 }

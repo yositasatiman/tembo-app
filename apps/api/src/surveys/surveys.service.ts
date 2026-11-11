@@ -5,7 +5,8 @@ import {
 import { randomUUID } from 'node:crypto';
 import { Prisma, SYSTEM_WALLETS } from '@tembo/db';
 import {
-  CreateSurveyInput, quoteSurvey, SURVEY_RULES, SurveyDetail, SurveyQuoteResponse, SurveySummary,
+  Answers, CreateSurveyInput, Question, QuestionResult, quoteSurvey, SURVEY_RULES, SurveyDetail, SurveyForm,
+  SurveyQuoteResponse, SurveyResults, SurveySummary, validateAnswers,
 } from '@tembo/shared';
 import { LedgerService, Tx } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -75,7 +76,8 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
         if (!elig.eligible) throw new BadRequestException(elig.reason);
       }
       const isFirstPost = await this.isFirstPost(tx, userId);
-      const q = quoteSurvey({ ...input, isFirstPost, withSubsidy: input.requestSubsidy })!;
+      const questionCount = input.questions.length;
+      const q = quoteSurvey({ ...input, questionCount, isFirstPost, withSubsidy: input.requestSubsidy })!;
       if (input.ownerContribution < q.minOwnerContribution) {
         throw new BadRequestException(`ต้องลง Coin อย่างน้อย ${q.minOwnerContribution} (พอจ่ายผู้ตอบ 1 คน)`);
       }
@@ -89,7 +91,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
           ownerId: userId,
           title: input.title,
           description: input.description || null,
-          questionCount: input.questionCount,
+          questionCount,
           rewardPerResponse: input.rewardPerResponse,
           quota: input.quota,
           targetPool: q.targetPool,
@@ -99,6 +101,15 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
           subsidyAmount: q.subsidyAmount,
           escrowWalletId: escrow.id,
           closesAt: input.closesAt,
+          questions: {
+            create: input.questions.map((qq, order) => ({
+              order, type: qq.type, title: qq.title, required: qq.required,
+              options: qq.type === 'SINGLE_CHOICE' || qq.type === 'MULTI_CHOICE' ? qq.options : [],
+              scaleMax: qq.type === 'SCALE' ? qq.scaleMax : null,
+              minLabel: qq.type === 'SCALE' ? qq.minLabel || null : null,
+              maxLabel: qq.type === 'SCALE' ? qq.maxLabel || null : null,
+            })),
+          },
         },
       });
       const owner = await tx.wallet.findUniqueOrThrow({ where: { userId } });
@@ -200,19 +211,22 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
 
   // ───────────── ตอบ / จ่ายรางวัล ─────────────
 
-  /** บันทึกว่าผู้ใช้ตอบครบแล้ว และจ่ายรางวัลจาก Escrow (ขั้นที่ 3 จะเรียกหลังบันทึกคำตอบ) */
-  async recordResponse(userId: string, id: string) {
+  /** บันทึกคำตอบ แล้วจ่ายรางวัลจาก Escrow ในธุรกรรมเดียวกัน */
+  async recordResponse(userId: string, id: string, answers: Answers) {
     return this.prisma.$transaction(async (tx) => {
       const s = await this.lock(tx, id);
       const blocked = await this.respondBlockedReason(tx, s, userId);
       if (blocked) throw blocked.conflict ? new ConflictException(blocked.reason) : new BadRequestException(blocked.reason);
+      const questions = await tx.surveyQuestion.findMany({ where: { surveyId: id }, orderBy: { order: 'asc' } });
+      const check = validateAnswers(questions, answers);
+      if (!check.ok) throw new BadRequestException({ message: 'กรุณาตอบให้ครบและถูกต้อง', errors: check.errors });
 
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
       await this.ledger.post(tx, {
         type: 'SURVEY_REWARD', idempotencyKey: `survey:${id}:resp:${userId}`, memo: `รางวัลตอบแบบสอบถาม "${s.title}"`,
         entries: [{ walletId: s.escrowWalletId, delta: -s.rewardPerResponse }, { walletId: wallet.id, delta: s.rewardPerResponse }],
       });
-      await tx.surveyResponse.create({ data: { surveyId: id, userId, reward: s.rewardPerResponse } });
+      await tx.surveyResponse.create({ data: { surveyId: id, userId, reward: s.rewardPerResponse, answers: check.clean } });
       const updated = await tx.survey.update({ where: { id }, data: { responsesCount: { increment: 1 } } });
       if (updated.responsesCount >= updated.quota) await this.closeLocked(tx, id);
       const after = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id }, select: { balance: true } });
@@ -226,6 +240,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
     if (s.status === 'PENDING_REVIEW') return { reason: 'แบบสอบถามนี้ยังรอแอดมินตรวจ' };
     if (s.status === 'CLOSED' || s.closesAt <= new Date() || s.responsesCount >= s.quota) return { reason: 'แบบสอบถามนี้ปิดรับแล้ว' };
     if (s.contributions.some((c) => c.key === userId)) return { reason: 'ผู้ที่สนับสนุนแบบสอบถามนี้ตอบไม่ได้' };
+    if (!(await db.surveyQuestion.count({ where: { surveyId: s.id } }))) return { reason: 'แบบสอบถามนี้ยังไม่มีคำถาม (สร้างก่อนมีระบบคำถาม)' };
     const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { cmuVerifiedAt: true } });
     if (!user.cmuVerifiedAt) return { reason: 'ต้องยืนยันอีเมล @cmu.ac.th ก่อนจึงจะรับ Coin ได้' };
     if (s.escrowWallet.balance < s.rewardPerResponse) return { reason: 'Coin รางวัลของแบบสอบถามนี้หมดแล้ว รอผู้โพสต์หรือเพื่อนเติม' };
@@ -294,27 +309,27 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
 
   // ───────────── อ่าน ─────────────
 
-  private summary(s: SurveyRow): SurveySummary {
+  private summary(s: SurveyRow, viewerId: string): SurveySummary {
     const left = Math.max(0, s.quota - s.responsesCount);
     return {
-      id: s.id, title: s.title, ownerName: s.owner.displayName, ownerFaculty: s.owner.faculty, questionCount: s.questionCount,
+      id: s.id, isMine: s.ownerId === viewerId, title: s.title, ownerName: s.owner.displayName, ownerFaculty: s.owner.faculty, questionCount: s.questionCount,
       rewardPerResponse: s.rewardPerResponse, quota: s.quota, responsesCount: s.responsesCount,
       status: s.status, closesAt: s.closesAt.toISOString(),
       payableResponses: s.status === 'CLOSED' ? 0 : Math.min(left, Math.floor(s.escrowWallet.balance / s.rewardPerResponse)),
     };
   }
 
-  async list(): Promise<SurveySummary[]> {
+  async list(viewerId: string): Promise<SurveySummary[]> {
     const rows = await this.prisma.survey.findMany({
       where: { status: 'OPEN', closesAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' }, take: 50, include: surveyInclude,
     });
-    return rows.map((s) => this.summary(s));
+    return rows.map((s) => this.summary(s, viewerId));
   }
 
   async mine(userId: string): Promise<SurveySummary[]> {
     const rows = await this.prisma.survey.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'desc' }, include: surveyInclude });
-    return rows.map((s) => this.summary(s));
+    return rows.map((s) => this.summary(s, userId));
   }
 
   async detail(id: string, viewerId: string): Promise<SurveyDetail> {
@@ -326,7 +341,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
     const hasResponded = !!(await this.prisma.surveyResponse.findUnique({ where: { surveyId_userId: { surveyId: id, userId: viewerId } } }));
     const blocked = await this.respondBlockedReason(this.prisma, s, viewerId);
     return {
-      ...this.summary(s),
+      ...this.summary(s, viewerId),
       description: s.description,
       targetPool: s.targetPool,
       postFee: s.postFee,
@@ -344,5 +359,89 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       createdAt: s.createdAt.toISOString(),
       closedAt: s.closedAt?.toISOString() ?? null,
     };
+  }
+
+  // ───────────── แบบฟอร์ม / ผลลัพธ์ ─────────────
+
+  private toQuestion(q: { id: string; order: number; type: Question['type']; title: string; required: boolean; options: string[]; scaleMax: number | null; minLabel: string | null; maxLabel: string | null }): Question {
+    return { id: q.id, order: q.order, type: q.type, title: q.title, required: q.required, options: q.options, scaleMax: q.scaleMax, minLabel: q.minLabel, maxLabel: q.maxLabel };
+  }
+
+  /** คำถามสำหรับทำแบบสอบถาม — เปิดให้ผู้โพสต์ (ดูตัวอย่าง) และผู้ที่ตอบได้เท่านั้น */
+  async form(id: string, viewerId: string): Promise<SurveyForm> {
+    const s = await this.prisma.survey.findUnique({ where: { id }, include: { ...surveyInclude, contributions: true, questions: { orderBy: { order: 'asc' } } } });
+    if (!s) throw new NotFoundException('ไม่พบแบบสอบถาม');
+    if (s.ownerId !== viewerId) {
+      const blocked = await this.respondBlockedReason(this.prisma, s, viewerId);
+      if (blocked) throw blocked.conflict ? new ConflictException(blocked.reason) : new ForbiddenException(blocked.reason);
+    }
+    return { id: s.id, title: s.title, description: s.description, rewardPerResponse: s.rewardPerResponse, questions: s.questions.map((q) => this.toQuestion(q)) };
+  }
+
+  private async ownedWithResponses(id: string, viewer: { id: string; role: string }) {
+    const s = await this.prisma.survey.findUnique({
+      where: { id },
+      include: {
+        questions: { orderBy: { order: 'asc' } },
+        responses: { orderBy: { createdAt: 'asc' }, include: { user: { select: { faculty: true, studyYear: true } } } },
+      },
+    });
+    if (!s) throw new NotFoundException('ไม่พบแบบสอบถาม');
+    if (s.ownerId !== viewer.id && viewer.role !== 'ADMIN') throw new ForbiddenException('เฉพาะผู้โพสต์ที่ดูผลได้');
+    return s;
+  }
+
+  /** สรุปผล — ไม่มีชื่อ/อีเมลผู้ตอบ เพื่อรักษาความเป็นนิรนาม */
+  async results(id: string, viewer: { id: string; role: string }): Promise<SurveyResults> {
+    const s = await this.ownedWithResponses(id, viewer);
+    const answers = s.responses.map((r) => (r.answers ?? {}) as Answers);
+    const questions: QuestionResult[] = s.questions.map((dbq) => {
+      const question = this.toQuestion(dbq);
+      const vals = answers.map((a) => a[question.id]).filter((v) => v !== undefined && v !== '');
+      if (question.type === 'SINGLE_CHOICE' || question.type === 'MULTI_CHOICE') {
+        const counts = question.options.map(() => 0);
+        for (const v of vals) for (const i of Array.isArray(v) ? v : [v as number]) if (counts[i] !== undefined) counts[i]++;
+        return { question, answered: vals.length, kind: 'choice', counts };
+      }
+      if (question.type === 'SCALE') {
+        const max = question.scaleMax ?? 5;
+        const counts = Array.from({ length: max }, () => 0);
+        for (const v of vals) counts[(v as number) - 1]++;
+        const sum = vals.reduce<number>((t, v) => t + (v as number), 0);
+        return { question, answered: vals.length, kind: 'scale', counts, average: vals.length ? Math.round((sum / vals.length) * 100) / 100 : null };
+      }
+      return { question, answered: vals.length, kind: 'text', samples: (vals as string[]).slice(-50).reverse() };
+    });
+    const fac = new Map<string, number>();
+    for (const r of s.responses) fac.set(r.user.faculty ?? 'ไม่ระบุ', (fac.get(r.user.faculty ?? 'ไม่ระบุ') ?? 0) + 1);
+    return {
+      id: s.id, title: s.title, responses: s.responses.length, questions,
+      byFaculty: [...fac].map(([faculty, count]) => ({ faculty, count })).sort((a, b) => b.count - a.count),
+    };
+  }
+
+  /** CSV สำหรับเปิดใน Excel (มี BOM ให้แสดงภาษาไทยถูกต้อง) */
+  async csv(id: string, viewer: { id: string; role: string }) {
+    const s = await this.ownedWithResponses(id, viewer);
+    const esc = (v: unknown) => {
+      const str = v === null || v === undefined ? '' : String(v);
+      return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const header = ['ลำดับ', 'เวลาที่ตอบ', 'คณะ', 'ชั้นปี', ...s.questions.map((q, i) => `Q${i + 1}. ${q.title}`)];
+    const rows = s.responses.map((r, i) => {
+      const a = (r.answers ?? {}) as Answers;
+      return [
+        i + 1, r.createdAt.toISOString(), r.user.faculty ?? '', r.user.studyYear ?? '',
+        ...s.questions.map((q) => {
+          const v = a[q.id];
+          if (v === undefined) return '';
+          if (q.type === 'SINGLE_CHOICE') return q.options[v as number] ?? '';
+          if (q.type === 'MULTI_CHOICE') return (v as number[]).map((x) => q.options[x]).join(' | ');
+          return v;
+        }),
+      ];
+    });
+    const body = [header, ...rows].map((row) => row.map(esc).join(',')).join('\r\n');
+    return { filename: `tembo-survey-${s.id}.csv`, content: '\uFEFF' + body };
   }
 }

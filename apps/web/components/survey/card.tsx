@@ -3,7 +3,8 @@ import { CalendarDays, Coins, ListChecks, Sparkles, Users } from 'lucide-react';
 import type { SurveySummary } from '@tembo/shared';
 import { Badge, buttonCls, fmtDay, Progress, StatusBadge } from '../ui';
 
-export function SurveyCard({ s, myFaculty, mine }: { s: SurveySummary; myFaculty?: string | null; mine?: boolean }) {
+export function SurveyCard({ s, myFaculty, mine: mineTab }: { s: SurveySummary; myFaculty?: string | null; mine?: boolean }) {
+  const mine = mineTab || s.isMine;
   const pct = s.quota ? Math.round((s.responsesCount / s.quota) * 100) : 0;
   const sameFaculty = !!myFaculty && s.ownerFaculty === myFaculty;
   return (
@@ -11,7 +12,7 @@ export function SurveyCard({ s, myFaculty, mine }: { s: SurveySummary; myFaculty
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap gap-1.5">
-            {mine ? <StatusBadge status={s.status} /> : sameFaculty && <Badge><Sparkles />คณะเดียวกับคุณ</Badge>}
+            {mine ? <><StatusBadge status={s.status} /><Badge tone="outline">ของคุณ</Badge></> : sameFaculty && <Badge><Sparkles />คณะเดียวกับคุณ</Badge>}
           </div>
           <h3 className="font-display text-base leading-snug font-semibold">
             <Link href={`/surveys/${s.id}`} className="hover:text-primary">{s.title}</Link>

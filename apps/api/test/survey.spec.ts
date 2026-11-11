@@ -6,7 +6,10 @@ import { SurveysService } from '../src/surveys/surveys.service';
 import { assertLedgerInvariant, balanceOf, createTestApp, makeUser, resetDb } from './helpers';
 
 const inDays = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString();
-const base = { title: 'ความเครียดของนักศึกษา', questionCount: 8, rewardPerResponse: 2, quota: 100, closesAt: inDays(7) };
+type Q = { type: 'SINGLE_CHOICE' | 'MULTI_CHOICE' | 'SHORT_TEXT' | 'LONG_TEXT' | 'SCALE'; title: string; required: boolean; options: string[]; scaleMax?: number };
+/** n คำถามแบบเลือกตอบ */
+const qs = (n: number): Q[] => Array.from({ length: n }, (_, i) => ({ type: 'SINGLE_CHOICE', title: `ข้อ ${i + 1}`, required: true, options: ['ใช่', 'ไม่ใช่'] }));
+const base = { title: 'ความเครียดของนักศึกษา', questions: qs(8), rewardPerResponse: 2, quota: 100, closesAt: inDays(7) };
 
 describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ / เพื่อนสนับสนุน', () => {
   let app: INestApplication;
@@ -21,6 +24,13 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
   afterEach(async () => assertLedgerInvariant(prisma));
   afterAll(async () => app.close());
 
+  /** คำตอบที่ถูกต้องสำหรับทุกคำถามของแบบสอบถาม */
+  const ans = async (surveyId: string) => {
+    const questions = await prisma.surveyQuestion.findMany({ where: { surveyId } });
+    return Object.fromEntries(questions.map((q) => [q.id,
+      q.type === 'SINGLE_CHOICE' ? 0 : q.type === 'MULTI_CHOICE' ? [0] : q.type === 'SCALE' ? 1 : 'ตอบ']));
+  };
+
   it('proRata แบ่งพอดีและเศษไปคนที่มีเศษมากก่อน', () => {
     expect(proRata(200, [100, 100, 100, 100, 100])).toEqual([40, 40, 40, 40, 40]);
     expect(proRata(10, [1, 1, 1])).toEqual([4, 3, 3]);
@@ -30,9 +40,9 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
 
   it('ตรวจรางวัลขั้นต่ำตามจำนวนข้อ และจำนวนข้อสูงสุด 50', async () => {
     const { agent } = await makeUser(app);
-    const r1 = await agent.post('/surveys').send({ ...base, questionCount: 25, rewardPerResponse: 5, ownerContribution: 50 }).expect(400);
+    const r1 = await agent.post('/surveys').send({ ...base, questions: qs(25), rewardPerResponse: 5, ownerContribution: 50 }).expect(400);
     expect(r1.body.message).toMatch(/อย่างน้อย 6 Coin/);
-    await agent.post('/surveys').send({ ...base, questionCount: 51, rewardPerResponse: 20, ownerContribution: 50 }).expect(400);
+    await agent.post('/surveys').send({ ...base, questions: qs(51), rewardPerResponse: 20, ownerContribution: 50 }).expect(400);
     await agent.post('/surveys').send({ ...base, closesAt: inDays(61), ownerContribution: 50 }).expect(400);
   });
 
@@ -45,7 +55,7 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
     expect(await balanceOf(prisma, wallet.id)).toBe(100);
 
     expect((await agent.get('/surveys/quote').expect(200)).body.isFirstPost).toBe(false);
-    const s2 = (await agent.post('/surveys').send({ ...base, questionCount: 15, rewardPerResponse: 4, quota: 10, ownerContribution: 40 }).expect(201)).body;
+    const s2 = (await agent.post('/surveys').send({ ...base, questions: qs(15), rewardPerResponse: 4, quota: 10, ownerContribution: 40 }).expect(201)).body;
     expect(s2.postFee).toBe(20);
     expect(await balanceOf(prisma, wallet.id)).toBe(40);
     expect(await balanceOf(prisma, SYSTEM_WALLETS.BURN)).toBe(20);
@@ -73,7 +83,7 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
     expect(s).toMatchObject({ status: 'PENDING_REVIEW', subsidyStatus: 'PENDING', subsidyAmount: 100, remainingToFund: 0 });
 
     const respondent = await makeUser(app);
-    await respondent.agent.post(`/surveys/${s.id}/responses`).expect(400); // ยังรอตรวจ
+    await respondent.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(400); // ยังรอตรวจ
 
     await owner.agent.get('/admin/subsidies').expect(403);
     const pending = (await admin.agent.get('/admin/subsidies').expect(200)).body;
@@ -129,12 +139,12 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
     await friend.agent.post(`/surveys/${s.id}/sponsor`).send({ amount: 50 }).expect(200); // ลงเพิ่มได้ รวมเป็นแถวเดียว
     expect(await prisma.surveyContribution.count({ where: { surveyId: s.id, kind: 'SPONSOR' } })).toBe(1);
 
-    const rr = await friend.agent.post(`/surveys/${s.id}/responses`).expect(400);
+    const rr = await friend.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(400);
     expect(rr.body.message).toMatch(/สนับสนุน/);
-    await owner.agent.post(`/surveys/${s.id}/responses`).expect(400);
+    await owner.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(400);
 
     const resp = await makeUser(app);
-    await resp.agent.post(`/surveys/${s.id}/responses`).expect(200);
+    await resp.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(200);
     await resp.agent.post(`/surveys/${s.id}/sponsor`).send({ amount: 10 }).expect(400);
   });
 
@@ -142,18 +152,18 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
     const owner = await makeUser(app);
     const s = (await owner.agent.post('/surveys').send({ ...base, rewardPerResponse: 10, quota: 5, ownerContribution: 20 }).expect(201)).body;
     const nonCmu = await makeUser(app, { cmu: false });
-    expect((await nonCmu.agent.post(`/surveys/${s.id}/responses`).expect(400)).body.message).toMatch(/cmu\.ac\.th/);
+    expect((await nonCmu.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(400)).body.message).toMatch(/cmu\.ac\.th/);
 
     const a = await makeUser(app, { balance: 0 });
-    expect((await a.agent.post(`/surveys/${s.id}/responses`).expect(200)).body).toEqual({ reward: 10, balance: 10 });
-    await a.agent.post(`/surveys/${s.id}/responses`).expect(409);
+    expect((await a.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(200)).body).toEqual({ reward: 10, balance: 10 });
+    await a.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(409);
     const b = await makeUser(app);
-    await b.agent.post(`/surveys/${s.id}/responses`).expect(200);
+    await b.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(200);
     const c = await makeUser(app);
-    expect((await c.agent.post(`/surveys/${s.id}/responses`).expect(400)).body.message).toMatch(/หมดแล้ว/);
+    expect((await c.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(400)).body.message).toMatch(/หมดแล้ว/);
     // ผู้โพสต์เติม แล้วคนที่ 3 ตอบได้
     await owner.agent.post(`/surveys/${s.id}/sponsor`).send({ amount: 10 }).expect(200);
-    await c.agent.post(`/surveys/${s.id}/responses`).expect(200);
+    await c.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(200);
     expect((await owner.agent.get(`/surveys/${s.id}`)).body).toMatchObject({ responsesCount: 3, escrowBalance: 0, funded: { owner: 30 } });
   });
 
@@ -168,7 +178,7 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
 
     for (let i = 0; i < 60; i++) {
       const r = await makeUser(app, { balance: 0 });
-      await surveys.recordResponse(r.user.id, s.id);
+      await surveys.recordResponse(r.user.id, s.id, await ans(s.id));
     }
     const burnBefore = await balanceOf(prisma, SYSTEM_WALLETS.BURN);
     await prisma.survey.update({ where: { id: s.id }, data: { closesAt: new Date(Date.now() - 1000) } });
@@ -185,13 +195,13 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
   it('ครบโควตาแล้วปิดเองและคืนส่วนเกิน / ผู้โพสต์กดปิดเองได้ คนอื่นปิดไม่ได้', async () => {
     const owner = await makeUser(app, { balance: 100 });
     const s = (await owner.agent.post('/surveys').send({ ...base, rewardPerResponse: 10, quota: 2, ownerContribution: 20 }).expect(201)).body;
-    for (let i = 0; i < 2; i++) await (await makeUser(app)).agent.post(`/surveys/${s.id}/responses`).expect(200);
+    for (let i = 0; i < 2; i++) await (await makeUser(app)).agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(200);
     expect((await owner.agent.get(`/surveys/${s.id}`)).body.status).toBe('CLOSED');
 
     const s2 = (await owner.agent.post('/surveys').send({ ...base, rewardPerResponse: 10, quota: 5, ownerContribution: 50 }).expect(201)).body;
     const before = await balanceOf(prisma, owner.wallet.id);
     await (await makeUser(app)).agent.post(`/surveys/${s2.id}/close`).expect(403);
-    await (await makeUser(app)).agent.post(`/surveys/${s2.id}/responses`).expect(200);
+    await (await makeUser(app)).agent.post(`/surveys/${s2.id}/responses`).send({ answers: await ans(s2.id) }).expect(200);
     const closed = (await owner.agent.post(`/surveys/${s2.id}/close`).expect(200)).body;
     expect(closed).toMatchObject({ status: 'CLOSED', escrowBalance: 0 });
     expect(await balanceOf(prisma, owner.wallet.id)).toBe(before + 40); // ค่าโพสต์ไม่คืน
@@ -210,7 +220,8 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
     const owner = await makeUser(app, { balance: 100 });
     const s = (await owner.agent.post('/surveys').send({ ...base, rewardPerResponse: 5, quota: 10, ownerContribution: 50 }).expect(201)).body;
     const users = await Promise.all(Array.from({ length: 25 }, () => makeUser(app, { balance: 0 })));
-    const results = await Promise.allSettled(users.map((u) => surveys.recordResponse(u.user.id, s.id)));
+    const a = await ans(s.id);
+    const results = await Promise.allSettled(users.map((u) => surveys.recordResponse(u.user.id, s.id, a)));
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(10);
     const d = await prisma.survey.findUniqueOrThrow({ where: { id: s.id }, include: { escrowWallet: true } });
     expect(d).toMatchObject({ status: 'CLOSED', responsesCount: 10 });

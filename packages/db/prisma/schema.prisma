@@ -53,6 +53,14 @@ enum SubsidyStatus {
   REJECTED
 }
 
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTI_CHOICE
+  SHORT_TEXT
+  LONG_TEXT
+  SCALE
+}
+
 enum ContributionKind {
   OWNER
   SPONSOR
@@ -181,6 +189,7 @@ model Survey {
 
   contributions SurveyContribution[]
   responses     SurveyResponse[]
+  questions     SurveyQuestion[]
 
   @@index([status, createdAt])
   @@index([ownerId])
@@ -213,8 +222,28 @@ model SurveyResponse {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   reward    Int
+  /// คำตอบ { [questionId]: number | number[] | string } — ตรวจรูปแบบด้วย validateAnswers (@tembo/shared)
+  answers   Json     @default("{}")
   createdAt DateTime @default(now())
 
   @@unique([surveyId, userId])
   @@index([userId])
+}
+
+model SurveyQuestion {
+  id       String       @id @default(cuid())
+  surveyId String
+  survey   Survey       @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  order    Int
+  type     QuestionType
+  title    String
+  required Boolean      @default(true)
+  /// ตัวเลือกของคำถามแบบเลือกตอบ
+  options  String[]     @default([])
+  /// คะแนนสูงสุดของคำถามแบบมาตรวัด (1..scaleMax)
+  scaleMax Int?
+  minLabel String?
+  maxLabel String?
+
+  @@unique([surveyId, order])
 }

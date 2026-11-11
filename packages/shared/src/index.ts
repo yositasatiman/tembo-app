@@ -123,19 +123,112 @@ export function quoteSurvey(i: { questionCount: number; rewardPerResponse: numbe
 
 const coin = (max: number) => z.number({ invalid_type_error: 'ต้องเป็นตัวเลข' }).int('ต้องเป็นจำนวนเต็ม').min(1).max(max);
 
+// ───────────────────────── คำถาม / คำตอบ (ขั้นที่ 3) ─────────────────────────
+
+export const QUESTION_TYPES = ['SINGLE_CHOICE', 'MULTI_CHOICE', 'SHORT_TEXT', 'LONG_TEXT', 'SCALE'] as const;
+export type QuestionType = (typeof QUESTION_TYPES)[number];
+export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
+  SINGLE_CHOICE: 'เลือกได้ 1 ข้อ',
+  MULTI_CHOICE: 'เลือกได้หลายข้อ',
+  SHORT_TEXT: 'ข้อความสั้น',
+  LONG_TEXT: 'ข้อความยาว',
+  SCALE: 'มาตรวัด (คะแนน)',
+};
+export const QUESTION_RULES = { MAX_OPTIONS: 10, SCALES: [5, 7, 10] as const, SHORT_TEXT_MAX: 300, LONG_TEXT_MAX: 3000 };
+export const isChoice = (t: QuestionType) => t === 'SINGLE_CHOICE' || t === 'MULTI_CHOICE';
+
+export const questionInputSchema = z.object({
+  type: z.enum(QUESTION_TYPES),
+  title: z.string().trim().min(1, 'กรอกคำถาม').max(300),
+  required: z.boolean().default(true),
+  options: z.array(z.string().trim().min(1, 'ตัวเลือกห้ามว่าง').max(200)).max(QUESTION_RULES.MAX_OPTIONS).default([]),
+  scaleMax: z.number().int().optional(),
+  minLabel: z.string().trim().max(50).optional(),
+  maxLabel: z.string().trim().max(50).optional(),
+}).superRefine((q, ctx) => {
+  if (isChoice(q.type) && q.options.length < 2) ctx.addIssue({ code: 'custom', path: ['options'], message: 'คำถามแบบเลือกตอบต้องมีอย่างน้อย 2 ตัวเลือก' });
+  if (isChoice(q.type) && new Set(q.options).size !== q.options.length) ctx.addIssue({ code: 'custom', path: ['options'], message: 'ตัวเลือกซ้ำกัน' });
+  if (q.type === 'SCALE' && !QUESTION_RULES.SCALES.includes(q.scaleMax as 5)) ctx.addIssue({ code: 'custom', path: ['scaleMax'], message: 'มาตรวัดต้องเป็น 5, 7 หรือ 10 คะแนน' });
+});
+export type QuestionInput = z.infer<typeof questionInputSchema>;
+
+export interface Question {
+  id: string;
+  order: number;
+  type: QuestionType;
+  title: string;
+  required: boolean;
+  options: string[];
+  scaleMax: number | null;
+  minLabel: string | null;
+  maxLabel: string | null;
+}
+
+/** คำตอบต่อข้อ: เลือก 1 ข้อ = index, เลือกหลายข้อ = index[], ข้อความ = string, มาตรวัด = 1..scaleMax */
+export type AnswerValue = number | number[] | string;
+export type Answers = Record<string, AnswerValue>;
+
+export const submitAnswersSchema = z.object({
+  answers: z.record(z.string(), z.union([z.number().int(), z.array(z.number().int()).max(QUESTION_RULES.MAX_OPTIONS), z.string().max(QUESTION_RULES.LONG_TEXT_MAX)])),
+});
+export type SubmitAnswersInput = z.infer<typeof submitAnswersSchema>;
+
+const isBlank = (v: AnswerValue | undefined) => v === undefined || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && v.length === 0);
+
+/**
+ * ตรวจคำตอบเทียบกับคำถาม — คืน { questionId: ข้อความผิดพลาด } (ว่าง = ผ่าน)
+ * ใช้ทั้งหน้าเว็บ (แจ้งก่อนส่ง) และ API (ตัดสินจริง) และคืนคำตอบที่ทำความสะอาดแล้ว
+ */
+export function validateAnswers(questions: Pick<Question, 'id' | 'type' | 'required' | 'options' | 'scaleMax'>[], answers: Answers) {
+  const errors: Record<string, string> = {};
+  const clean: Answers = {};
+  const known = new Set(questions.map((q) => q.id));
+  for (const key of Object.keys(answers)) if (!known.has(key)) errors[key] = 'ไม่มีคำถามนี้';
+  for (const q of questions) {
+    const v = answers[q.id];
+    if (isBlank(v)) { if (q.required) errors[q.id] = 'ต้องตอบข้อนี้'; continue; }
+    switch (q.type) {
+      case 'SINGLE_CHOICE':
+        if (typeof v !== 'number' || v < 0 || v >= q.options.length) errors[q.id] = 'เลือกตัวเลือกที่มีอยู่';
+        else clean[q.id] = v;
+        break;
+      case 'MULTI_CHOICE': {
+        const arr = Array.isArray(v) ? [...new Set(v)].sort((a, b) => a - b) : null;
+        if (!arr || arr.some((i) => i < 0 || i >= q.options.length)) errors[q.id] = 'เลือกตัวเลือกที่มีอยู่';
+        else clean[q.id] = arr;
+        break;
+      }
+      case 'SHORT_TEXT':
+      case 'LONG_TEXT': {
+        const max = q.type === 'SHORT_TEXT' ? QUESTION_RULES.SHORT_TEXT_MAX : QUESTION_RULES.LONG_TEXT_MAX;
+        if (typeof v !== 'string') errors[q.id] = 'ต้องเป็นข้อความ';
+        else if (v.trim().length > max) errors[q.id] = `ยาวได้ไม่เกิน ${max} ตัวอักษร`;
+        else clean[q.id] = v.trim();
+        break;
+      }
+      case 'SCALE':
+        if (typeof v !== 'number' || v < 1 || v > (q.scaleMax ?? 5)) errors[q.id] = `ให้คะแนน 1–${q.scaleMax ?? 5}`;
+        else clean[q.id] = v;
+        break;
+    }
+  }
+  return { ok: Object.keys(errors).length === 0, errors, clean };
+}
+
 export const createSurveySchema = z.object({
   title: z.string().trim().min(3, 'ชื่ออย่างน้อย 3 ตัวอักษร').max(150),
   description: z.string().trim().max(2000).optional(),
-  questionCount: coin(SURVEY_RULES.MAX_QUESTIONS),
+  questions: z.array(questionInputSchema).min(1, 'ต้องมีอย่างน้อย 1 คำถาม').max(SURVEY_RULES.MAX_QUESTIONS, `ไม่เกิน ${SURVEY_RULES.MAX_QUESTIONS} คำถาม`),
   rewardPerResponse: coin(SURVEY_RULES.MAX_REWARD),
   quota: coin(SURVEY_RULES.MAX_QUOTA),
   closesAt: z.coerce.date(),
   ownerContribution: z.number().int().min(0),
   requestSubsidy: z.boolean().default(false),
 }).superRefine((v, ctx) => {
-  const band = surveyBand(v.questionCount);
+  const n = v.questions.length;
+  const band = surveyBand(n);
   if (band && v.rewardPerResponse < band.minReward) {
-    ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: `แบบสอบถาม ${v.questionCount} ข้อ ต้องให้รางวัลอย่างน้อย ${band.minReward} Coin/คน` });
+    ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: `แบบสอบถาม ${n} ข้อ ต้องให้รางวัลอย่างน้อย ${band.minReward} Coin/คน` });
   }
   const now = Date.now();
   if (v.closesAt.getTime() < now + 60 * 60_000) {
@@ -157,6 +250,7 @@ export type SubsidyStatus = 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface SurveySummary {
   id: string;
+  isMine: boolean;
   title: string;
   ownerName: string | null;
   ownerFaculty: string | null;
@@ -192,3 +286,24 @@ export interface SurveyDetail extends SurveySummary {
 }
 
 export interface SurveyQuoteResponse { isFirstPost: boolean; subsidy: { eligible: boolean; reason: string | null; remainingSlots: number } }
+
+export interface SurveyForm {
+  id: string;
+  title: string;
+  description: string | null;
+  rewardPerResponse: number;
+  questions: Question[];
+}
+
+export type QuestionResult =
+  | { question: Question; answered: number; kind: 'choice'; counts: number[] }
+  | { question: Question; answered: number; kind: 'scale'; counts: number[]; average: number | null }
+  | { question: Question; answered: number; kind: 'text'; samples: string[] };
+
+export interface SurveyResults {
+  id: string;
+  title: string;
+  responses: number;
+  questions: QuestionResult[];
+  byFaculty: { faculty: string; count: number }[];
+}
