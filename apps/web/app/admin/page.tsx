@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError, post } from '@/lib/api';
-import { Card, ErrorText, fmtDate, TopBar } from '@/components/ui';
+import { AppShell } from '@/components/shell';
+import { Button, Card, ErrorText, fmtDate, SectionHeader } from '@/components/ui';
 
 interface Pending {
   id: string; title: string; description: string | null; questionCount: number; rewardPerResponse: number;
@@ -11,6 +12,10 @@ interface Pending {
 }
 
 export default function AdminPage() {
+  return <AppShell><Admin /></AppShell>;
+}
+
+function Admin() {
   const [rows, setRows] = useState<Pending[] | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(() => api<Pending[]>('/admin/subsidies').then(setRows).catch((e) => {
@@ -26,22 +31,21 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <TopBar />
-      <h2 className="text-xl font-bold">แอดมิน: ตรวจการขอระบบสมทบ</h2>
+    <div className="max-w-3xl space-y-4">
+      <SectionHeader title="แอดมิน: ตรวจการขอระบบสมทบ" subtitle="ตรวจว่าเป็นงานวิจัยจริงก่อนอนุมัติ — ระบบจะสร้าง Coin เข้า Escrow ทันที" />
       <ErrorText>{error}</ErrorText>
-      {rows?.length === 0 && <Card className="text-center text-sm text-slate-500">ไม่มีรายการรอตรวจ</Card>}
+      {rows?.length === 0 && <Card className="py-10 text-center text-sm text-muted-foreground">ไม่มีรายการรอตรวจ</Card>}
       {rows?.map((r) => (
-        <Card key={r.id} className="space-y-2">
-          <Link href={`/surveys/${r.id}`} className="font-bold underline">{r.title}</Link>
-          {r.description && <p className="whitespace-pre-line text-sm text-slate-600">{r.description}</p>}
-          <p className="text-xs text-slate-500">
+        <Card key={r.id} className="space-y-3 p-6">
+          <Link href={`/surveys/${r.id}`} className="font-display font-semibold hover:text-primary">{r.title}</Link>
+          {r.description && <p className="whitespace-pre-line text-sm">{r.description}</p>}
+          <p className="text-xs text-muted-foreground">
             {r.owner.displayName} · {r.owner.faculty} · {r.owner.cmuEmail}<br />
             {r.questionCount} ข้อ · {r.rewardPerResponse} × {r.quota} = {r.targetPool} Coin · ขอสมทบ <b>{r.subsidyAmount}</b> · {fmtDate(r.createdAt)}
           </p>
           <div className="flex gap-2">
-            <button onClick={() => review(r.id, true)} className="flex-1 rounded-xl bg-emerald-600 py-2 font-semibold text-white">อนุมัติ</button>
-            <button onClick={() => review(r.id, false)} className="flex-1 rounded-xl border border-slate-300 py-2 font-semibold">ไม่อนุมัติ</button>
+            <Button className="flex-1" onClick={() => review(r.id, true)}>อนุมัติ</Button>
+            <Button variant="outline" className="flex-1" onClick={() => review(r.id, false)}>ไม่อนุมัติ</Button>
           </div>
         </Card>
       ))}

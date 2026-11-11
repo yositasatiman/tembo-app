@@ -11,5 +11,5 @@ export default function Home() {
       .then((me) => router.replace(me.onboarded ? '/surveys' : '/onboarding'))
       .catch(() => router.replace('/login'));
   }, [router]);
-  return <div className="pt-32"><Logo /><p className="mt-2 text-center text-slate-500">กำลังโหลด…</p></div>;
+  return <div className="flex min-h-screen flex-col items-center justify-center gap-3"><Logo size="lg" /><p className="text-sm text-muted-foreground">กำลังโหลด…</p></div>;
 }

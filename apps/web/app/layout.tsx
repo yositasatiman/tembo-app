@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'TEMBO — มอลูป',
-  description: 'ศูนย์รวมแบบสอบถามงานวิจัยและกิจกรรมสำหรับชาว มช.',
+  title: 'TEMBO — แบบสอบถามงานวิจัยและกิจกรรมของชาว มช.',
+  description: 'ศูนย์รวมแบบสอบถามงานวิจัยและกิจกรรมสำหรับชาว มช. ด้วยระบบ Coin หมุนเวียน',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -11,11 +11,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="th">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body>
-        <main className="mx-auto min-h-screen max-w-md px-4 py-8">{children}</main>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

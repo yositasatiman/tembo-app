@@ -59,6 +59,7 @@ export interface MeResponse {
   referralCode: string;
   onboarded: boolean;
   balance: number;
+  stats: { responses: number; surveysPosted: number; coinEarned: number };
 }
 
 // ───────────────────────── แบบสอบถาม + Escrow (ขั้นที่ 2) ─────────────────────────
@@ -158,6 +159,7 @@ export interface SurveySummary {
   id: string;
   title: string;
   ownerName: string | null;
+  ownerFaculty: string | null;
   questionCount: number;
   rewardPerResponse: number;
   quota: number;

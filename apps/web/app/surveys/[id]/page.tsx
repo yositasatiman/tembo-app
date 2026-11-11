@@ -1,86 +1,101 @@
 'use client';
 import { FormEvent, use, useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { ArrowLeft, CalendarDays, CheckCircle2, Coins, HandCoins, ListChecks, Lock, Users } from 'lucide-react';
 import type { SurveyDetail } from '@tembo/shared';
 import { api, ApiError, post } from '@/lib/api';
-import { Button, Card, ErrorText, fmtDate, inputCls, StatusBadge, TopBar } from '@/components/ui';
+import { AppShell, useMe } from '@/components/shell';
+import { Badge, Button, Card, ErrorText, fmtDate, inputCls, Notice, Progress, Spinner, StatusBadge } from '@/components/ui';
 
 export default function SurveyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
+  return <AppShell><SurveyView id={id} /></AppShell>;
+}
+
+function SurveyView({ id }: { id: string }) {
+  const { reload: reloadMe } = useMe();
   const [s, setS] = useState<SurveyDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [msg, setMsg] = useState('');
 
   const load = useCallback(() => api<SurveyDetail>(`/surveys/${id}`).then(setS).catch((e) => {
-    if (e instanceof ApiError && e.status === 404) setNotFound(true); else router.replace('/login');
-  }), [id, router]);
+    if (e instanceof ApiError && e.status === 404) setNotFound(true);
+  }), [id]);
   useEffect(() => { load(); }, [load]);
+  const done = (m: string) => { setMsg(m); load(); reloadMe(); };
 
-  if (notFound) return <div><TopBar /><Card className="text-center">ไม่พบแบบสอบถาม</Card></div>;
-  if (!s) return <p className="pt-32 text-center text-slate-500">กำลังโหลด…</p>;
+  if (notFound) return <Card className="py-10 text-center">ไม่พบแบบสอบถาม</Card>;
+  if (!s) return <Spinner />;
 
+  const pct = s.quota ? Math.round((s.responsesCount / s.quota) * 100) : 0;
   const total = s.targetPool || 1;
   const seg = [
-    { v: s.funded.owner, cls: 'bg-brand-600', label: 'ผู้โพสต์' },
-    { v: s.funded.system, cls: 'bg-emerald-500', label: 'ระบบสมทบ' },
-    { v: s.funded.sponsors, cls: 'bg-sky-500', label: `เพื่อน ${s.funded.sponsorCount} คน` },
-    { v: s.subsidyStatus === 'PENDING' ? s.subsidyAmount : 0, cls: 'bg-emerald-200', label: 'สมทบ (รอตรวจ)' },
+    { v: s.funded.owner, cls: 'bg-primary', label: 'ผู้โพสต์' },
+    { v: s.funded.system, cls: 'bg-success', label: 'ระบบสมทบ' },
+    { v: s.funded.sponsors, cls: 'bg-sky', label: `เพื่อน ${s.funded.sponsorCount} คน` },
+    { v: s.subsidyStatus === 'PENDING' ? s.subsidyAmount : 0, cls: 'bg-success/40', label: 'สมทบ (รอตรวจ)' },
   ];
 
   return (
-    <div className="space-y-4">
-      <TopBar />
-      <Card className="space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="text-xl font-bold leading-snug">{s.title}</h2>
-          <StatusBadge status={s.status} />
+    <div className="max-w-3xl space-y-4">
+      <Link href="/surveys" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />กลับไปฟีด</Link>
+
+      <Card className="space-y-4 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex gap-1.5"><StatusBadge status={s.status} />{s.isOwner && <Badge tone="outline">ของคุณ</Badge>}</div>
+            <h1 className="font-display text-xl leading-snug font-semibold">{s.title}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{s.ownerName ?? 'ไม่ระบุชื่อ'}{s.ownerFaculty && ` · คณะ${s.ownerFaculty}`}</p>
+          </div>
+          <Badge tone="solid" className="px-3 py-1 text-sm"><Coins />{s.rewardPerResponse} Coin / คน</Badge>
         </div>
-        <p className="text-sm text-slate-500">โดย {s.ownerName ?? 'ไม่ระบุชื่อ'} · {s.questionCount} ข้อ · ปิด {fmtDate(s.closesAt)}</p>
-        {s.description && <p className="whitespace-pre-line text-sm text-slate-700">{s.description}</p>}
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <Stat k="รางวัล/คน" v={`${s.rewardPerResponse}`} />
-          <Stat k="ตอบแล้ว" v={`${s.responsesCount}/${s.quota}`} />
-          <Stat k="รับได้อีก" v={`${s.payableResponses} คน`} />
+        {s.description && <p className="whitespace-pre-line text-sm leading-relaxed">{s.description}</p>}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium">ตอบแล้ว {s.responsesCount}/{s.quota} คน</span>
+            <span className="text-muted-foreground">{pct}%</span>
+          </div>
+          <Progress value={pct} />
+        </div>
+        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground [&_svg]:size-3.5">
+          <span className="flex items-center gap-1.5"><CalendarDays />ปิด {fmtDate(s.closesAt)}</span>
+          <span className="flex items-center gap-1.5"><ListChecks />{s.questionCount} ข้อ</span>
+          <span className="flex items-center gap-1.5"><Users />รับรางวัลได้อีก {s.payableResponses} คน</span>
         </div>
       </Card>
 
-      <Card className="space-y-3">
-        <div className="flex justify-between text-sm"><b>ยอดรางวัลรวม</b><span>{s.targetPool.toLocaleString()} Coin</span></div>
-        <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
-          {seg.map((x) => x.v > 0 && <div key={x.label} className={x.cls} style={{ width: `${(x.v / total) * 100}%` }} title={`${x.label} ${x.v}`} />)}
-        </div>
-        <ul className="grid grid-cols-2 gap-1 text-xs text-slate-600">
-          {seg.filter((x) => x.v > 0).map((x) => <li key={x.label} className="flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${x.cls}`} />{x.label} {x.v}</li>)}
-          {s.remainingToFund > 0 && <li className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-300" />ยังขาด {s.remainingToFund}</li>}
-        </ul>
-        <p className="text-xs text-slate-500">Coin ใน Escrow ตอนนี้ {s.escrowBalance.toLocaleString()}{s.postFee ? ` · ค่าโพสต์ ${s.postFee}` : ''}</p>
-        {s.subsidyStatus === 'PENDING' && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">รอแอดมินตรวจการขอระบบสมทบ — ระหว่างนี้ยังไม่รับคำตอบ</p>}
-        {s.subsidyStatus === 'REJECTED' && s.subsidyNote && <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">ไม่ได้รับการสมทบ: {s.subsidyNote}</p>}
-      </Card>
-
-      {msg && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{msg}</p>}
+      {msg && <Notice tone="success">{msg}</Notice>}
 
       {!s.isOwner && s.status !== 'CLOSED' && (
-        <Card className="space-y-2">
-          <h3 className="font-bold">ตอบแบบสอบถาม</h3>
-          {s.hasResponded ? <p className="text-sm text-emerald-700">✓ คุณตอบแล้ว</p>
-            : s.canRespond ? <RespondButton s={s} onDone={(m) => { setMsg(m); load(); }} />
-            : <p className="text-sm text-slate-500">{s.respondBlockedReason}</p>}
+        <Card className="space-y-3">
+          <h3 className="font-display font-semibold">ตอบแบบสอบถาม</h3>
+          {s.hasResponded ? <p className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4" />คุณตอบแล้ว</p>
+            : s.canRespond ? <RespondButton s={s} onDone={done} />
+            : <p className="flex items-center gap-2 text-sm text-muted-foreground"><Lock className="size-4" />{s.respondBlockedReason}</p>}
         </Card>
       )}
 
-      {s.status !== 'CLOSED' && s.remainingToFund > 0 && !s.hasResponded && (
-        <SponsorCard s={s} onDone={(m) => { setMsg(m); load(); }} />
-      )}
+      <Card className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-display font-semibold">Coin รางวัล (Escrow)</h3>
+          <span className="text-sm text-muted-foreground">รวม {s.targetPool.toLocaleString()} Coin</span>
+        </div>
+        <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
+          {seg.map((x) => x.v > 0 && <div key={x.label} className={x.cls} style={{ width: `${(x.v / total) * 100}%` }} title={`${x.label} ${x.v}`} />)}
+        </div>
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {seg.filter((x) => x.v > 0).map((x) => <li key={x.label} className="flex items-center gap-1.5"><span className={`size-2 rounded-full ${x.cls}`} />{x.label} {x.v}</li>)}
+          {s.remainingToFund > 0 && <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-muted-foreground/30" />ยังขาด {s.remainingToFund}</li>}
+        </ul>
+        <p className="text-xs text-muted-foreground">คงเหลือใน Escrow {s.escrowBalance.toLocaleString()} Coin{s.postFee ? ` · ค่าโพสต์ ${s.postFee} Coin` : ' · โพสต์แรกฟรี'}</p>
+        {s.subsidyStatus === 'PENDING' && <Notice tone="warning">รอแอดมินตรวจการขอระบบสมทบ — ระหว่างนี้ยังไม่รับคำตอบ แต่เพื่อนช่วยสนับสนุนได้</Notice>}
+        {s.subsidyStatus === 'REJECTED' && s.subsidyNote && <Notice>ไม่ได้รับการสมทบ: {s.subsidyNote}</Notice>}
+      </Card>
 
-      {s.isOwner && s.status !== 'CLOSED' && <CloseCard s={s} onDone={(m) => { setMsg(m); load(); }} />}
+      {s.status !== 'CLOSED' && s.remainingToFund > 0 && !s.hasResponded && <SponsorCard s={s} onDone={done} />}
+      {s.isOwner && s.status !== 'CLOSED' && <CloseCard s={s} onDone={done} />}
     </div>
   );
-}
-
-function Stat({ k, v }: { k: string; v: string }) {
-  return <div className="rounded-xl bg-brand-50 py-2"><p className="text-lg font-bold text-brand-700">{v}</p><p className="text-xs text-slate-500">{k}</p></div>;
 }
 
 function RespondButton({ s, onDone }: { s: SurveyDetail; onDone: (m: string) => void }) {
@@ -96,7 +111,7 @@ function RespondButton({ s, onDone }: { s: SurveyDetail; onDone: (m: string) => 
   return (
     <div className="space-y-2">
       <Button onClick={go} disabled={loading}>ฉันตอบครบแล้ว รับ {s.rewardPerResponse} Coin</Button>
-      <p className="text-xs text-slate-500">โหมดทดลองของขั้นที่ 2 — ขั้นที่ 3 จะเปลี่ยนเป็นแบบฟอร์มคำตอบจริง</p>
+      <p className="text-xs text-muted-foreground">โหมดทดลองของขั้นที่ 2 — ขั้นที่ 3 จะเปลี่ยนเป็นแบบฟอร์มคำตอบจริง</p>
       <ErrorText>{error}</ErrorText>
     </div>
   );
@@ -113,15 +128,15 @@ function SponsorCard({ s, onDone }: { s: SurveyDetail; onDone: (m: string) => vo
   }
   return (
     <Card>
-      <form onSubmit={submit} className="space-y-2">
-        <h3 className="font-bold">{s.isOwner ? 'เติม Coin รางวัล' : 'ช่วยสนับสนุน'}</h3>
-        <p className="text-xs text-slate-500">
-          {s.isOwner ? 'เพิ่มจำนวนคนที่รับรางวัลได้' : 'โอน Coin เข้ารางวัลของแบบสอบถามนี้ — ผู้สนับสนุนจะตอบแบบสอบถามนี้ไม่ได้'} · ที่เหลือตอนปิดรับจะคืนตามสัดส่วน
-          {s.myContribution > 0 && ` · คุณลงแล้ว ${s.myContribution}`}
+      <form onSubmit={submit} className="space-y-3">
+        <h3 className="flex items-center gap-2 font-display font-semibold"><HandCoins className="size-4 text-primary" />{s.isOwner ? 'เติม Coin รางวัล' : 'ช่วยสนับสนุน'}</h3>
+        <p className="text-xs text-muted-foreground">
+          {s.isOwner ? 'เพิ่มจำนวนคนที่รับรางวัลได้' : 'ลง Coin เข้ารางวัลของแบบสอบถามนี้ — ผู้สนับสนุนจะตอบแบบสอบถามนี้ไม่ได้'} · ที่เหลือตอนปิดรับคืนตามสัดส่วน
+          {s.myContribution > 0 && ` · คุณลงแล้ว ${s.myContribution} Coin`}
         </p>
         <div className="flex gap-2">
           <input type="number" className={inputCls} min={1} max={s.remainingToFund} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
-          <Button className="!w-auto shrink-0" disabled={loading || amount < 1}>ลง Coin</Button>
+          <Button disabled={loading || amount < 1}>ลง Coin</Button>
         </div>
         <ErrorText>{error}</ErrorText>
       </form>
@@ -139,7 +154,7 @@ function CloseCard({ s, onDone }: { s: SurveyDetail; onDone: (m: string) => void
   }
   return (
     <Card className="space-y-2">
-      <button onClick={close} className="w-full rounded-xl border border-red-200 px-4 py-3 font-semibold text-red-600 hover:bg-red-50">ปิดรับแบบสอบถาม</button>
+      <Button variant="danger" className="w-full" onClick={close}>ปิดรับแบบสอบถาม</Button>
       <ErrorText>{error}</ErrorText>
     </Card>
   );

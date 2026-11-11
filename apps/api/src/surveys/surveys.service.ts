@@ -15,7 +15,7 @@ const SYSTEM_KEY = 'SYSTEM';
 type Db = Tx | PrismaService;
 
 const surveyInclude = {
-  owner: { select: { displayName: true } },
+  owner: { select: { displayName: true, faculty: true } },
   escrowWallet: { select: { balance: true } },
 } satisfies Prisma.SurveyInclude;
 type SurveyRow = Prisma.SurveyGetPayload<{ include: typeof surveyInclude }>;
@@ -297,7 +297,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   private summary(s: SurveyRow): SurveySummary {
     const left = Math.max(0, s.quota - s.responsesCount);
     return {
-      id: s.id, title: s.title, ownerName: s.owner.displayName, questionCount: s.questionCount,
+      id: s.id, title: s.title, ownerName: s.owner.displayName, ownerFaculty: s.owner.faculty, questionCount: s.questionCount,
       rewardPerResponse: s.rewardPerResponse, quota: s.quota, responsesCount: s.responsesCount,
       status: s.status, closesAt: s.closesAt.toISOString(),
       payableResponses: s.status === 'CLOSED' ? 0 : Math.min(left, Math.floor(s.escrowWallet.balance / s.rewardPerResponse)),
