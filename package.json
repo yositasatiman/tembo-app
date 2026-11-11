@@ -11,6 +11,7 @@
     "dev:api": "pnpm --filter @tembo/api dev",
     "dev:web": "pnpm --filter @tembo/web dev",
     "test": "pnpm --filter @tembo/api test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "db:make-admin": "pnpm --filter @tembo/db make-admin"
   }
 }

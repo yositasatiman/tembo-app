@@ -67,7 +67,12 @@ export default function MePage() {
         ) : <p className="text-sm text-slate-500">ยังไม่มีรายการ</p>}
       </Card>
 
-      <Card className="text-center text-sm text-slate-500">แบบสอบถามงานวิจัยและ Event — เร็ว ๆ นี้</Card>
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/surveys" className="rounded-2xl bg-white p-4 text-center font-semibold text-brand-700 ring-1 ring-brand-100 hover:ring-brand-500">แบบสอบถาม</Link>
+        <Link href="/surveys/new" className="rounded-2xl bg-white p-4 text-center font-semibold text-brand-700 ring-1 ring-brand-100 hover:ring-brand-500">+ โพสต์ใหม่</Link>
+        {me.role === 'ADMIN' && <Link href="/admin" className="col-span-2 rounded-2xl bg-amber-50 p-3 text-center text-sm font-semibold text-amber-800 ring-1 ring-amber-200">แอดมิน: ตรวจการขอระบบสมทบ</Link>}
+      </div>
+      <Card className="text-center text-sm text-slate-500">Event — เร็ว ๆ นี้</Card>
     </div>
   );
 }

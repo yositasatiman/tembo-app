@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
-    "seed": "node dist/seed.js"
+    "seed": "node dist/seed.js",
+    "make-admin": "node dist/make-admin.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "6.19.3",

@@ -32,6 +32,31 @@ enum WalletKind {
 enum TxType {
   SIGNUP_BONUS
   ADMIN_ADJUST
+  POST_FEE
+  ESCROW_FUND
+  SUBSIDY
+  SURVEY_REWARD
+  ESCROW_REFUND
+}
+
+enum SurveyStatus {
+  /// รอแอดมินตรวจ (ขอระบบสมทบ) — ยังรับคำตอบไม่ได้ แต่รับ Coin สนับสนุนได้
+  PENDING_REVIEW
+  OPEN
+  CLOSED
+}
+
+enum SubsidyStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ContributionKind {
+  OWNER
+  SPONSOR
+  SUBSIDY
 }
 
 model User {
@@ -54,8 +79,11 @@ model User {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  wallet   Wallet?
-  sessions Session[]
+  wallet        Wallet?
+  sessions      Session[]
+  surveys       Survey[]
+  contributions SurveyContribution[]
+  responses     SurveyResponse[]
 }
 
 model EmailOtp {
@@ -97,6 +125,7 @@ model Wallet {
   balance   Int           @default(0)
   createdAt DateTime      @default(now())
   entries   LedgerEntry[]
+  survey    Survey?
 }
 
 /// ธุรกรรม 1 รายการ = ชุดของ entry ที่ผลรวม delta เป็น 0 (double-entry)
@@ -120,4 +149,72 @@ model LedgerEntry {
   createdAt DateTime @default(now())
 
   @@index([walletId, createdAt])
+}
+
+/// แบบสอบถามงานวิจัย (ขั้นที่ 2: ส่วนเศรษฐกิจ Coin — คำถาม/คำตอบจริงเพิ่มในขั้นที่ 3)
+model Survey {
+  id                String        @id @default(cuid())
+  ownerId           String
+  owner             User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  title             String
+  description       String?
+  questionCount     Int
+  rewardPerResponse Int
+  quota             Int
+  /// ยอดรางวัลรวมที่ต้องหาให้ครบ = rewardPerResponse × quota
+  targetPool        Int
+  /// ค่าโพสต์ที่จ่ายไปแล้ว (0 = โพสต์แรกฟรี) — ไม่คืน
+  postFee           Int
+  status            SurveyStatus
+  subsidyStatus     SubsidyStatus @default(NONE)
+  /// ยอดที่ระบบจะสมทบ/สมทบแล้ว
+  subsidyAmount     Int           @default(0)
+  subsidyNote       String?
+  /// กระเป๋า Escrow ของแบบสอบถามนี้ (ถือ Coin รางวัลที่ยังไม่จ่าย)
+  escrowWalletId    String        @unique
+  escrowWallet      Wallet        @relation(fields: [escrowWalletId], references: [id], onDelete: Restrict)
+  responsesCount    Int           @default(0)
+  closesAt          DateTime
+  closedAt          DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  contributions SurveyContribution[]
+  responses     SurveyResponse[]
+
+  @@index([status, createdAt])
+  @@index([ownerId])
+  @@index([subsidyStatus])
+}
+
+/// ใครลง Coin ใน Escrow เท่าไร — ใช้คืน Coin ที่เหลือตามสัดส่วน
+model SurveyContribution {
+  id        String           @id @default(cuid())
+  surveyId  String
+  survey    Survey           @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  kind      ContributionKind
+  /// null = ระบบ (SUBSIDY)
+  userId    String?
+  user      User?            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  /// userId หรือ "SYSTEM" — 1 แถวต่อผู้ลง 1 ราย
+  key       String
+  amount    Int
+  refunded  Int              @default(0)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([surveyId, key])
+}
+
+model SurveyResponse {
+  id        String   @id @default(cuid())
+  surveyId  String
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  reward    Int
+  createdAt DateTime @default(now())
+
+  @@unique([surveyId, userId])
+  @@index([userId])
 }
