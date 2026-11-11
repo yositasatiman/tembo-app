@@ -5,6 +5,17 @@ export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
+// refresh ได้ทีละครั้ง: ถ้าหลายคำขอเจอ 401 พร้อมกันจะรอผลเดียวกัน
+// (ส่ง refresh token เดิมซ้ำ = เซิร์ฟเวอร์ถือว่าถูกขโมยและตัดทุกเซสชัน)
+let refreshing: Promise<boolean> | null = null;
+function refreshOnce() {
+  refreshing ??= fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
+    .then((r) => r.ok)
+    .catch(() => false)
+    .finally(() => { setTimeout(() => { refreshing = null; }, 0); });
+  return refreshing;
+}
+
 /** เรียก API ผ่าน /api (rewrite ไป NestJS) — ถ้า access token หมดอายุจะ refresh ให้อัตโนมัติ 1 ครั้ง */
 export async function api<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -13,8 +24,7 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
   });
   if (res.status === 401 && retry && !path.startsWith('/auth/')) {
-    const r = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
-    if (r.ok) return api<T>(path, init, false);
+    if (await refreshOnce()) return api<T>(path, init, false);
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {

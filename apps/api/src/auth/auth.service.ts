@@ -13,6 +13,8 @@ const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 export interface IssuedTokens { accessToken: string; refreshToken: string }
 
+const REFRESH_REUSE_GRACE_MS = 30_000;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -97,6 +99,8 @@ export class AuthService {
     const session = await this.prisma.session.findUnique({ where: { refreshTokenHash: sha256(refreshToken) }, include: { user: true } });
     if (!session) throw new UnauthorizedException('กรุณาเข้าสู่ระบบ');
     if (session.revokedAt) {
+      // เพิ่งหมุนไปไม่ถึง 30 วินาที = น่าจะเป็นหลายแท็บ refresh พร้อมกัน ไม่ใช่ token ถูกขโมย
+      if (Date.now() - session.revokedAt.getTime() < REFRESH_REUSE_GRACE_MS) throw new UnauthorizedException('กรุณาลองใหม่');
       await this.prisma.session.updateMany({ where: { userId: session.userId, revokedAt: null }, data: { revokedAt: new Date() } });
       throw new UnauthorizedException('กรุณาเข้าสู่ระบบใหม่');
     }

@@ -89,6 +89,11 @@ describe('Auth & profile', () => {
     const { agent, res } = await login(app, prisma, mail, 'a@gmail.com');
     const oldRt = ([] as string[]).concat(res.headers['set-cookie'] ?? []).find((c: string) => c.startsWith('tembo_rt='))!.split(';')[0];
     await agent.post('/auth/refresh').expect(200);
+    // ภายใน 30 วินาที (หลายแท็บ refresh พร้อมกัน): ปฏิเสธ แต่ไม่ตัดเซสชันอื่น
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', oldRt).expect(401);
+    expect(await prisma.session.count({ where: { revokedAt: null } })).toBe(1);
+    // เกิน 30 วินาที = ถือว่าถูกขโมย ตัดทุกเซสชัน
+    await prisma.session.updateMany({ where: { revokedAt: { not: null } }, data: { revokedAt: new Date(Date.now() - 60_000) } });
     await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', oldRt).expect(401);
     expect(await prisma.session.count({ where: { revokedAt: null } })).toBe(0);
   });
