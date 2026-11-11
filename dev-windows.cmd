@@ -29,6 +29,10 @@ node -e "const fs=require('fs'),c=require('crypto');let s=fs.readFileSync('.env'
 if errorlevel 1 goto fail
 :have_env
 
+echo Stopping previous TEMBO servers on ports 3000/4000 (if running)...
+powershell -NoProfile -Command "foreach($p in 3000,4000){Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}"
+timeout /t 2 /nobreak >nul
+
 echo [3/7] Starting PostgreSQL (docker compose)...
 docker compose up -d
 if errorlevel 1 goto fail
@@ -67,6 +71,7 @@ echo.
 echo Done! Open http://localhost:3000
 echo The OTP code is printed in the "TEMBO API" window (line [DEV MAIL]).
 echo To stop: close the API and Web windows, then run: docker compose stop
+echo To update after git pull: just run this file again.
 echo.
 pause
 exit /b 0
