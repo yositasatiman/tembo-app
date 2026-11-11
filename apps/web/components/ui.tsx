@@ -50,12 +50,12 @@ const STATUS: Record<string, [string, string]> = {
 };
 export function StatusBadge({ status }: { status: string }) {
   const [label, cls] = STATUS[status] ?? [status, 'bg-slate-100'];
-  return <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>;
+  return <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>;
 }
 
 export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className="mb-1 block text-sm font-semibold text-slate-700">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
@@ -63,6 +63,6 @@ export function Field({ label, hint, children }: { label: string; hint?: ReactNo
   );
 }
 
-export const inputCls = 'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
+export const inputCls = 'w-full min-w-0 rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
 
 export const fmtDate = (iso: string) => new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
