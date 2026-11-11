@@ -1,0 +1,123 @@
+// TEMBO — ขั้นที่ 1: ผู้ใช้, การยืนยันตัวตน, กระเป๋า Coin และบัญชีแยกประเภท (ledger)
+// ตารางแบบสอบถาม/Event/Escrow จะเพิ่มในขั้นถัดไป
+
+generator client {
+  provider        = "prisma-client-js"
+  // ใช้ query compiler (ไม่มี Rust engine) + driver adapter ของ node-postgres
+  engineType      = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SystemRole {
+  MEMBER
+  ADMIN
+}
+
+enum OtpPurpose {
+  LOGIN
+  VERIFY_CMU
+}
+
+enum WalletKind {
+  USER
+  SYSTEM_MINT
+  SYSTEM_BURN
+  ESCROW
+}
+
+enum TxType {
+  SIGNUP_BONUS
+  ADMIN_ADJUST
+}
+
+model User {
+  id            String     @id @default(cuid())
+  /// อีเมลที่ใช้ล็อกอิน (อีเมลอะไรก็ได้) — เก็บเป็นตัวพิมพ์เล็ก
+  email         String     @unique
+  /// อีเมล @cmu.ac.th ที่ยืนยันแล้ว — 1 อีเมลต่อ 1 บัญชี
+  cmuEmail      String?    @unique
+  cmuVerifiedAt DateTime?
+  displayName   String?
+  faculty       String?
+  studyYear     Int?
+  interests     String[]   @default([])
+  role          SystemRole @default(MEMBER)
+  /// โค้ดชวนเพื่อน 6 หลัก
+  referralCode  String     @unique
+  referredById  String?
+  referredBy    User?      @relation("Referral", fields: [referredById], references: [id])
+  referrals     User[]     @relation("Referral")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  wallet   Wallet?
+  sessions Session[]
+}
+
+model EmailOtp {
+  id         String     @id @default(cuid())
+  email      String
+  purpose    OtpPurpose
+  /// HMAC-SHA256 ของรหัส (ไม่เก็บรหัสจริง)
+  codeHash   String
+  /// ผูกกับผู้ใช้เมื่อเป็นการยืนยันอีเมล CMU
+  userId     String?
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([email, purpose, createdAt])
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SHA-256 ของ refresh token (ไม่เก็บ token จริง)
+  refreshTokenHash String    @unique
+  userAgent        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Wallet {
+  id        String        @id @default(cuid())
+  kind      WalletKind
+  userId    String?       @unique
+  user      User?         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  /// ยอดคงเหลือ (cache ของผลรวม LedgerEntry.delta) — อัปเดตในธุรกรรมเดียวกับ entry เสมอ
+  balance   Int           @default(0)
+  createdAt DateTime      @default(now())
+  entries   LedgerEntry[]
+}
+
+/// ธุรกรรม 1 รายการ = ชุดของ entry ที่ผลรวม delta เป็น 0 (double-entry)
+model LedgerTx {
+  id             String        @id @default(cuid())
+  type           TxType
+  /// กันการประมวลผลซ้ำ (กดซ้ำ / เน็ตส่งซ้ำ)
+  idempotencyKey String        @unique
+  memo           String?
+  createdAt      DateTime      @default(now())
+  entries        LedgerEntry[]
+}
+
+model LedgerEntry {
+  id        String   @id @default(cuid())
+  txId      String
+  tx        LedgerTx @relation(fields: [txId], references: [id], onDelete: Restrict)
+  walletId  String
+  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  delta     Int
+  createdAt DateTime @default(now())
+
+  @@index([walletId, createdAt])
+}

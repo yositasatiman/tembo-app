@@ -1,0 +1,16 @@
+{
+  "name": "tembo-app",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build:packages": "pnpm --filter @tembo/shared build && pnpm --filter @tembo/db build",
+    "build": "pnpm build:packages && pnpm --filter @tembo/api build && pnpm --filter @tembo/web build",
+    "db:migrate": "pnpm --filter @tembo/db migrate:dev",
+    "db:deploy": "pnpm --filter @tembo/db migrate:deploy",
+    "db:seed": "pnpm --filter @tembo/db seed",
+    "dev:api": "pnpm --filter @tembo/api dev",
+    "dev:web": "pnpm --filter @tembo/web dev",
+    "test": "pnpm --filter @tembo/api test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
