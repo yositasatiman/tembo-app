@@ -56,7 +56,7 @@ export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
       <span className={cx('flex items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-card', size === 'lg' ? 'size-12' : 'size-9')}>
         <Target className={size === 'lg' ? 'size-6' : 'size-5'} />
       </span>
-      <span className={cx('font-display font-semibold tracking-tight text-primary-deep', size === 'lg' ? 'text-3xl' : 'text-xl')}>TEMBO</span>
+      <span className={cx('font-extrabold tracking-tight text-primary-deep', size === 'lg' ? 'text-3xl' : 'text-xl')}>TEMBO</span>
     </span>
   );
 }
@@ -105,7 +105,7 @@ export function SectionHeader({ title, subtitle, action }: { title: string; subt
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h2 className="font-display text-lg font-semibold tracking-tight">{title}</h2>
+        <h2 className="text-lg font-extrabold tracking-tight">{title}</h2>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
       </div>
       {action}

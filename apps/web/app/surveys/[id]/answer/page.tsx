@@ -74,7 +74,7 @@ function AnswerForm({ id }: { id: string }) {
       <div className="max-w-3xl">
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
           <span className="flex size-14 items-center justify-center rounded-full bg-success-soft text-success"><CheckCircle2 className="size-8" /></span>
-          <h1 className="font-display text-xl font-semibold">ขอบคุณที่ช่วยงานวิจัย!</h1>
+          <h1 className="text-xl font-extrabold">ขอบคุณที่ช่วยงานวิจัย!</h1>
           <p className="flex items-center gap-1.5 text-sm"><Coins className="size-4 text-primary" />ได้รับ <b>{done.reward} Coin</b> · คงเหลือ {done.balance.toLocaleString()} Coin</p>
           <div className="mt-2 flex gap-2">
             <Link href="/surveys" className={buttonCls('primary', 'sm')}>ทำแบบสอบถามอื่นต่อ</Link>
@@ -90,7 +90,7 @@ function AnswerForm({ id }: { id: string }) {
       <Back id={id} />
       <Card className="space-y-3 p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1 className="font-display text-xl leading-snug font-semibold">{form.title}</h1>
+          <h1 className="text-xl leading-snug font-extrabold">{form.title}</h1>
           <Badge tone="solid" className="px-3 py-1 text-sm"><Coins />{form.rewardPerResponse} Coin</Badge>
         </div>
         {form.description && <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{form.description}</p>}

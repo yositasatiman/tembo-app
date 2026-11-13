@@ -9,6 +9,7 @@ import {
   SURVEY_RULES, SurveyDetail, SurveyForm, SurveyQuoteResponse, SurveyResults, SurveySummary, surveyQuestionCount, validateAnswers,
 } from '@tembo/shared';
 import { LedgerService, Tx } from '../ledger/ledger.service';
+import { NotificationsService } from '../notifications/notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { proRata } from './pro-rata';
 
@@ -42,7 +43,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(SurveysService.name);
   private timer?: NodeJS.Timeout;
 
-  constructor(private readonly prisma: PrismaService, private readonly ledger: LedgerService) {}
+  constructor(private readonly prisma: PrismaService, private readonly ledger: LedgerService, private readonly notifications: NotificationsService) {}
 
   onModuleInit() {
     if (process.env.NODE_ENV === 'test') return;
@@ -181,6 +182,11 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       if (amount > remaining) throw new BadRequestException(`สนับสนุนได้อีกไม่เกิน ${remaining} Coin`);
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
       await this.fund(tx, s, userId, wallet.id, amount, s.ownerId === userId ? 'OWNER' : 'SPONSOR');
+      if (s.ownerId !== userId) {
+        const who = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { displayName: true } });
+        await this.notifications.notify(tx, [s.ownerId],
+          { type: 'SURVEY_SPONSORED', title: 'มีเพื่อนช่วยสนับสนุน', body: `${who.displayName ?? 'เพื่อน'} ลง ${amount} Coin ใน "${s.title}"`, link: `/surveys/${id}` });
+      }
     });
     return this.detail(id, userId);
   }
@@ -220,6 +226,9 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
           status: s.status === 'PENDING_REVIEW' ? 'OPEN' : s.status,
         },
       });
+      await this.notifications.notify(tx, [s.ownerId], approve
+        ? { type: 'SUBSIDY_APPROVED', title: 'ได้รับระบบสมทบ', body: `TEMBO สมทบ ${s.subsidyAmount} Coin ให้ "${s.title}" แล้ว เปิดรับคำตอบได้`, link: `/surveys/${id}` }
+        : { type: 'SUBSIDY_REJECTED', title: 'ไม่ได้รับระบบสมทบ', body: `"${s.title}"${note ? ` — ${note}` : ''} · เปิดรับคำตอบตามปกติ`, link: `/surveys/${id}` });
       this.log.log(`subsidy ${approve ? 'approved' : 'rejected'} survey=${id} by admin=${adminId}`);
     });
   }
@@ -370,6 +379,10 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
         if (shares[i]) await tx.surveyContribution.update({ where: { id: c.id }, data: { refunded: shares[i] } });
       }
     }
+    await this.notifications.notify(tx, [s.ownerId], {
+      type: 'SURVEY_CLOSED', title: 'แบบสอบถามปิดรับแล้ว',
+      body: `"${s.title}" ได้ผู้ตอบ ${s.responsesCount}/${s.quota} คน${leftover > 0 ? ' · คืน Coin ที่เหลือตามสัดส่วนแล้ว' : ''}`, link: `/surveys/${id}/results`,
+    });
     await tx.survey.update({
       where: { id },
       data: {
@@ -381,15 +394,29 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
 
   // ───────────── อ่าน ─────────────
 
-  private summary(s: SurveyRow, viewerId: string, responded = false): SurveySummary {
+  private summary(s: SurveyRow, viewerId: string, responded = false, saved = false): SurveySummary {
     const left = Math.max(0, s.quota - s.responsesCount);
     return {
       id: s.id, isMine: s.ownerId === viewerId, mode: s.mode, title: s.title, description: s.description, tags: s.tags, ownerName: s.owner.displayName, ownerFaculty: s.owner.faculty, questionCount: s.questionCount,
       rewardPerResponse: s.rewardPerResponse, quota: s.quota, responsesCount: s.responsesCount,
       status: s.status, closesAt: s.closesAt.toISOString(),
       payableResponses: s.status === 'CLOSED' ? 0 : Math.min(left, Math.floor(s.escrowWallet.balance / s.rewardPerResponse)),
-      responded, createdAt: s.createdAt.toISOString(),
+      responded, saved, createdAt: s.createdAt.toISOString(),
     };
+  }
+
+  /** สถานะ "ตอบแล้ว" / "บันทึกไว้" ของผู้ดู สำหรับหลายแบบสอบถามพร้อมกัน */
+  private async viewerFlags(viewerId: string, ids: string[]) {
+    const [done, saved] = await Promise.all([
+      this.prisma.surveyResponse.findMany({ where: { userId: viewerId, surveyId: { in: ids } }, select: { surveyId: true } }),
+      this.prisma.surveySave.findMany({ where: { userId: viewerId, surveyId: { in: ids } }, select: { surveyId: true } }),
+    ]);
+    return { done: new Set(done.map((r) => r.surveyId)), saved: new Set(saved.map((r) => r.surveyId)) };
+  }
+
+  private async summaries(rows: SurveyRow[], viewerId: string) {
+    const f = await this.viewerFlags(viewerId, rows.map((r) => r.id));
+    return rows.map((s) => this.summary(s, viewerId, f.done.has(s.id), f.saved.has(s.id)));
   }
 
   async list(viewerId: string, take = 50): Promise<SurveySummary[]> {
@@ -397,15 +424,25 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       where: { status: 'OPEN', closesAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' }, take, include: surveyInclude,
     });
-    const done = new Set((await this.prisma.surveyResponse.findMany({
-      where: { userId: viewerId, surveyId: { in: rows.map((r) => r.id) } }, select: { surveyId: true },
-    })).map((r) => r.surveyId));
-    return rows.map((s) => this.summary(s, viewerId, done.has(s.id)));
+    return this.summaries(rows, viewerId);
   }
 
   async mine(userId: string): Promise<SurveySummary[]> {
     const rows = await this.prisma.survey.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'desc' }, include: surveyInclude });
-    return rows.map((s) => this.summary(s, userId));
+    return this.summaries(rows, userId);
+  }
+
+  /** แบบสอบถามที่บันทึกไว้ (ล่าสุดก่อน) */
+  async saved(userId: string): Promise<SurveySummary[]> {
+    const saves = await this.prisma.surveySave.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, include: { survey: { include: surveyInclude } } });
+    return this.summaries(saves.map((x) => x.survey), userId);
+  }
+
+  async save(userId: string, id: string, on: boolean) {
+    if (!(await this.prisma.survey.findUnique({ where: { id }, select: { id: true } }))) throw new NotFoundException('ไม่พบแบบสอบถาม');
+    if (on) await this.prisma.surveySave.upsert({ where: { surveyId_userId: { surveyId: id, userId } }, create: { surveyId: id, userId }, update: {} });
+    else await this.prisma.surveySave.deleteMany({ where: { surveyId: id, userId } });
+    return { saved: on };
   }
 
   async detail(id: string, viewerId: string): Promise<SurveyDetail> {
@@ -420,8 +457,9 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
     const start = s.mode === 'EXTERNAL' && !isOwner
       ? await this.prisma.surveyStart.findUnique({ where: { surveyId_userId: { surveyId: id, userId: viewerId } } })
       : null;
+    const saved = !!(await this.prisma.surveySave.findUnique({ where: { surveyId_userId: { surveyId: id, userId: viewerId } } }));
     return {
-      ...this.summary(s, viewerId, hasResponded),
+      ...this.summary(s, viewerId, hasResponded, saved),
       externalUrl: isOwner || start ? s.externalUrl : null,
       completionCode: isOwner ? s.completionCode : null,
       myStart: start ? this.startInfo(s, viewerId, start) : null,

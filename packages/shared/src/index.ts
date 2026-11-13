@@ -61,7 +61,7 @@ export interface MeResponse {
   referralCode: string;
   onboarded: boolean;
   balance: number;
-  stats: { responses: number; surveysPosted: number; coinEarned: number };
+  stats: { responses: number; surveysPosted: number; coinEarned: number; eventsJoined: number; eventsCheckedIn: number };
 }
 
 // ───────────────────────── แบบสอบถาม + Escrow (ขั้นที่ 2) ─────────────────────────
@@ -302,6 +302,8 @@ export interface SurveySummary {
   payableResponses: number;
   /** ผู้ดูตอบแล้วหรือยัง */
   responded: boolean;
+  /** ผู้ดูบันทึกไว้หรือไม่ */
+  saved: boolean;
   createdAt: string;
 }
 
@@ -521,3 +523,10 @@ export const TX_LABEL: Record<TxType, string> = {
 };
 export interface WalletEntry { id: string; delta: number; type: TxType; memo: string | null; createdAt: string }
 export interface WalletResponse { balance: number; earned: number; spent: number; entries: WalletEntry[]; nextBefore: string | null }
+
+// ───────────────────────── แจ้งเตือน + บันทึก (ขั้นที่ 5.2) ─────────────────────────
+
+export type NotificationType = 'EVENT_APPROVED' | 'EVENT_REJECTED' | 'EVENT_CANCELLED' | 'WAITLIST_PROMOTED'
+  | 'SUBSIDY_APPROVED' | 'SUBSIDY_REJECTED' | 'SURVEY_SPONSORED' | 'SURVEY_CLOSED';
+export interface NotificationItem { id: string; type: NotificationType; title: string; body: string; link: string | null; read: boolean; createdAt: string }
+export interface NotificationList { items: NotificationItem[]; unread: number; nextBefore: string | null }

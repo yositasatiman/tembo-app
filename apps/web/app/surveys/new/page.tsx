@@ -82,7 +82,7 @@ function NewSurvey() {
           <ModeButton active={mode === 'EXTERNAL'} onClick={() => setMode('EXTERNAL')} icon={<Link2 />} title="ใช้ลิงก์ Google Form" text="ผู้ตอบกรอกรหัสยืนยันเพื่อรับ Coin" />
         </div>
         <Card className="space-y-4 p-6">
-          <div><h1 className="font-display text-xl font-semibold">โพสต์แบบสอบถามงานวิจัย</h1><p className="text-sm text-muted-foreground">รางวัล Coin จะถูกล็อกไว้ใน Escrow และจ่ายให้ผู้ตอบแต่ละคนอัตโนมัติ</p></div>
+          <div><h1 className="text-xl font-extrabold">โพสต์แบบสอบถามงานวิจัย</h1><p className="text-sm text-muted-foreground">รางวัล Coin จะถูกล็อกไว้ใน Escrow และจ่ายให้ผู้ตอบแต่ละคนอัตโนมัติ</p></div>
           <Field label="ชื่อแบบสอบถาม"><input className={inputCls} required minLength={3} maxLength={150} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
           <Field label="รายละเอียด (ไม่บังคับ)">
             <textarea className={inputCls} rows={3} maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ใครควรตอบ ใช้เวลากี่นาที ข้อมูลจะถูกใช้อย่างไร" />
@@ -113,7 +113,7 @@ function NewSurvey() {
         {mode === 'IN_APP' ? (
           <Card className="space-y-4 p-6">
             <div>
-              <h3 className="font-display font-semibold">คำถาม ({questionCount}/{SURVEY_RULES.MAX_QUESTIONS})</h3>
+              <h3 className="font-extrabold">คำถาม ({questionCount}/{SURVEY_RULES.MAX_QUESTIONS})</h3>
               <p className="text-sm text-muted-foreground">จำนวนข้อมีผลกับรางวัลขั้นต่ำและค่าโพสต์</p>
             </div>
             <QuestionBuilder value={questions} onChange={setQuestions} />
@@ -144,7 +144,7 @@ function NewSurvey() {
         )}
 
         <Card className="space-y-4 p-6">
-          <h3 className="font-display font-semibold">Coin</h3>
+          <h3 className="font-extrabold">Coin</h3>
           <label className={`flex gap-3 rounded-2xl border p-4 ${info.subsidy.eligible ? 'border-primary/30 bg-primary-soft/40' : 'border-border opacity-60'}`}>
             <input type="checkbox" className="mt-1 accent-primary" disabled={!info.subsidy.eligible} checked={requestSubsidy} onChange={(e) => { setRequestSubsidy(e.target.checked); setContribution(''); }} />
             <span className="text-sm">

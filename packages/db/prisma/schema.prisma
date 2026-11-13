@@ -85,6 +85,17 @@ enum RegistrationStatus {
   CANCELLED
 }
 
+enum NotificationType {
+  EVENT_APPROVED
+  EVENT_REJECTED
+  EVENT_CANCELLED
+  WAITLIST_PROMOTED
+  SUBSIDY_APPROVED
+  SUBSIDY_REJECTED
+  SURVEY_SPONSORED
+  SURVEY_CLOSED
+}
+
 enum QuestionType {
   SINGLE_CHOICE
   MULTI_CHOICE
@@ -128,6 +139,8 @@ model User {
   registrations EventRegistration[]
   eventHides    EventHide[]
   surveyStarts  SurveyStart[]
+  notifications Notification[]
+  savedSurveys  SurveySave[]
 }
 
 model EmailOtp {
@@ -235,6 +248,7 @@ model Survey {
   responses     SurveyResponse[]
   questions     SurveyQuestion[]
   starts        SurveyStart[]
+  saves         SurveySave[]
 
   @@index([status, createdAt])
   @@index([ownerId])
@@ -380,4 +394,33 @@ model EventHide {
 
   @@id([eventId, userId])
   @@index([userId])
+}
+
+/// แจ้งเตือนในแอป (ขั้นที่ 5.2)
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  /// ลิงก์ในแอป เช่น /events/xxx
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+/// แบบสอบถามที่ผู้ใช้กดบันทึกไว้
+model SurveySave {
+  surveyId  String
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([surveyId, userId])
+  @@index([userId, createdAt])
 }

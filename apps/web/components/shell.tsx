@@ -3,11 +3,11 @@ import { createContext, FormEvent, ReactNode, Suspense, useCallback, useContext,
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  BadgeCheck, CalendarDays, ChevronRight, ClipboardList, Coins, FileText, Home, LogOut, Menu, Search,
+  BadgeCheck, Bell, CalendarDays, ChevronRight, ClipboardList, Coins, FileText, Home, LogOut, Menu, Search,
   ShieldAlert, ShieldCheck, Ticket, UserRound,
 } from 'lucide-react';
 import type { MeResponse } from '@tembo/shared';
-import { getMe, post } from '@/lib/api';
+import { api, getMe, post } from '@/lib/api';
 import { Avatar, cx, Spinner, yearLabel } from './ui';
 
 interface MeCtx { me: MeResponse; reload: () => Promise<void> }
@@ -52,6 +52,7 @@ const MAIN_NAV = [
   { href: '/events', label: 'Event', icon: CalendarDays, match: (p: string) => p.startsWith('/events') },
 ];
 const MORE_NAV = [
+  { href: '/notifications', label: 'แจ้งเตือน', icon: Bell, match: (p: string) => p.startsWith('/notifications') },
   { href: '/coin', label: 'Coin', icon: Coins, match: (p: string) => p.startsWith('/coin') },
   { href: '/me', label: 'โปรไฟล์', icon: UserRound, match: (p: string) => p === '/me' },
 ];
@@ -157,11 +158,37 @@ function Header({ me }: { me: MeResponse }) {
           <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="ค้นหา" placeholder="ค้นหา"
             className="h-[34px] w-full rounded-2xl border border-border/50 bg-[#e8e3f2]/50 pr-3 pl-9 text-[15px] outline-none placeholder:text-muted-foreground focus:border-primary focus:bg-card" />
         </form>
+        <NotificationBell />
         <AccountMenu me={me} />
       </div>
     </header>
   );
 }
+
+/** กระดิ่งพร้อมจำนวนที่ยังไม่อ่าน — โหลดใหม่ทุก 60 วินาที, เมื่อเปลี่ยนหน้า และเมื่อหน้าแจ้งเตือนอ่านแล้ว */
+function NotificationBell() {
+  const path = usePathname();
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const load = () => api<{ unread: number }>('/notifications/unread-count').then((r) => alive && setUnread(r.unread)).catch(() => undefined);
+    load();
+    const t = setInterval(load, 60_000);
+    const onRead = (e: Event) => setUnread((e as CustomEvent<number>).detail);
+    window.addEventListener('tembo:unread', onRead);
+    return () => { alive = false; clearInterval(t); window.removeEventListener('tembo:unread', onRead); };
+  }, [path]);
+  return (
+    <Link href="/notifications" aria-label={unread ? `แจ้งเตือน ยังไม่อ่าน ${unread} รายการ` : 'แจ้งเตือน'}
+      className="relative flex size-10 shrink-0 items-center justify-center rounded-xl text-indigo hover:bg-lavender-soft">
+      <Bell className="size-5" />
+      {unread > 0 && <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-extrabold text-white">{unread > 99 ? '99+' : unread}</span>}
+    </Link>
+  );
+}
+
+/** แจ้งให้กระดิ่งอัปเดตจำนวนที่ยังไม่อ่าน */
+export const announceUnread = (n: number) => window.dispatchEvent(new CustomEvent('tembo:unread', { detail: n }));
 
 // ───────────── แท็บฟีด (ใช้ทั้งหน้า ฟีด / แบบสอบถาม / Event) ─────────────
 

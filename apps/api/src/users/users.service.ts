@@ -9,10 +9,12 @@ export class UsersService {
 
   async me(userId: string): Promise<MeResponse> {
     const u = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { wallet: true } });
-    const [responses, surveysPosted, earned] = await Promise.all([
+    const [responses, surveysPosted, earned, eventsJoined, eventsCheckedIn] = await Promise.all([
       this.prisma.surveyResponse.count({ where: { userId } }),
       this.prisma.survey.count({ where: { ownerId: userId } }),
       this.prisma.surveyResponse.aggregate({ where: { userId }, _sum: { reward: true } }),
+      this.prisma.eventRegistration.count({ where: { userId, status: 'REGISTERED' } }),
+      this.prisma.eventRegistration.count({ where: { userId, checkedInAt: { not: null } } }),
     ]);
     return {
       id: u.id,
@@ -27,7 +29,7 @@ export class UsersService {
       referralCode: u.referralCode,
       onboarded: !!(u.displayName && u.faculty && u.studyYear && u.interests.length),
       balance: u.wallet?.balance ?? 0,
-      stats: { responses, surveysPosted, coinEarned: earned._sum.reward ?? 0 },
+      stats: { responses, surveysPosted, coinEarned: earned._sum.reward ?? 0, eventsJoined, eventsCheckedIn },
     };
   }
 

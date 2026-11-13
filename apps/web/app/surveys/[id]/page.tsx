@@ -45,7 +45,7 @@ function SurveyView({ id }: { id: string }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex gap-1.5"><StatusBadge status={s.status} />{s.isOwner && <Badge tone="outline">ของคุณ</Badge>}</div>
-            <h1 className="font-display text-xl leading-snug font-semibold">{s.title}</h1>
+            <h1 className="text-xl leading-snug font-extrabold">{s.title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{s.ownerName ?? 'ไม่ระบุชื่อ'}{s.ownerFaculty && ` · คณะ${s.ownerFaculty}`}</p>
           </div>
           <Badge tone="solid" className="px-3 py-1 text-sm"><Coins />{s.rewardPerResponse} Coin / คน</Badge>
@@ -75,7 +75,7 @@ function SurveyView({ id }: { id: string }) {
 
       {!s.isOwner && s.status !== 'CLOSED' && (s.mode === 'IN_APP' || !s.canRespond) && (
         <Card className="space-y-3">
-          <h3 className="font-display font-semibold">ตอบแบบสอบถาม</h3>
+          <h3 className="font-extrabold">ตอบแบบสอบถาม</h3>
           {s.hasResponded ? <p className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4" />คุณตอบแล้ว</p>
             : s.canRespond ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -89,7 +89,7 @@ function SurveyView({ id }: { id: string }) {
 
       <Card className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-display font-semibold">Coin รางวัล (Escrow)</h3>
+          <h3 className="font-extrabold">Coin รางวัล (Escrow)</h3>
           <span className="text-sm text-muted-foreground">รวม {s.targetPool.toLocaleString()} Coin</span>
         </div>
         <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
@@ -107,7 +107,7 @@ function SurveyView({ id }: { id: string }) {
       {s.isOwner && (
         <Card className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="font-display font-semibold">ผลลัพธ์</h3>
+            <h3 className="font-extrabold">ผลลัพธ์</h3>
             <p className="text-sm text-muted-foreground">ผู้ตอบ {s.responsesCount} คน · ดาวน์โหลดเป็น CSV ได้</p>
           </div>
           <div className="flex gap-2">
@@ -135,7 +135,7 @@ function SponsorCard({ s, onDone }: { s: SurveyDetail; onDone: (m: string) => vo
   return (
     <Card>
       <form onSubmit={submit} className="space-y-3">
-        <h3 className="flex items-center gap-2 font-display font-semibold"><HandCoins className="size-4 text-primary" />{s.isOwner ? 'เติม Coin รางวัล' : 'ช่วยสนับสนุน'}</h3>
+        <h3 className="flex items-center gap-2 font-extrabold"><HandCoins className="size-4 text-primary" />{s.isOwner ? 'เติม Coin รางวัล' : 'ช่วยสนับสนุน'}</h3>
         <p className="text-xs text-muted-foreground">
           {s.isOwner ? 'เพิ่มจำนวนคนที่รับรางวัลได้' : 'ลง Coin เข้ารางวัลของแบบสอบถามนี้ — ผู้สนับสนุนจะตอบแบบสอบถามนี้ไม่ได้'} · ที่เหลือตอนปิดรับคืนตามสัดส่วน
           {s.myContribution > 0 && ` · คุณลงแล้ว ${s.myContribution} Coin`}

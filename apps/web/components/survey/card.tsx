@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
-import { Clock, Link2, Share2, Sparkles, Users } from 'lucide-react';
+import { useState } from 'react';
+import { Bookmark, Clock, Link2, Share2, Sparkles, Users } from 'lucide-react';
+import { api, post } from '@/lib/api';
 import type { SurveySummary } from '@tembo/shared';
 import { cx, fmtDate } from '../ui';
 import { shareLink } from '../event/util';
@@ -14,6 +16,15 @@ const STATUS: Record<string, [string, string]> = {
 /** การ์ดแบบสอบถาม ตาม Figma "SURVEY / discovery" */
 export function SurveyCard({ s, reason, onToast }: { s: SurveySummary; reason?: string; onToast?: (m: string) => void }) {
   const href = `/surveys/${s.id}`;
+  const [saved, setSaved] = useState(s.saved);
+  async function toggleSave() {
+    const next = !saved;
+    setSaved(next);
+    try {
+      if (next) await post(`/surveys/${s.id}/save`); else await api(`/surveys/${s.id}/save`, { method: 'DELETE' });
+      onToast?.(next ? 'บันทึกแล้ว' : 'เลิกบันทึกแล้ว');
+    } catch (e) { setSaved(!next); onToast?.((e as Error).message); }
+  }
   const full = s.status === 'OPEN' && s.payableResponses === 0;
   const [label, cls] = full ? ['รอเติม Coin', 'bg-coin-soft text-warning-foreground'] : STATUS[s.status] ?? [s.status, 'bg-muted'];
   return (
@@ -34,8 +45,12 @@ export function SurveyCard({ s, reason, onToast }: { s: SurveySummary; reason?: 
       </div>
       <p className="text-xs text-muted-foreground">ปิดรับ {fmtDate(s.closesAt)}{s.isMine && ` · ตอบแล้ว ${s.responsesCount}/${s.quota}`}</p>
       <div className="flex items-center justify-between">
+        <div className="flex">
+        <button type="button" aria-label={saved ? 'เลิกบันทึก' : 'บันทึก'} aria-pressed={saved} onClick={toggleSave}
+          className="flex size-9 items-center justify-center rounded-xl text-indigo hover:bg-lavender-soft"><Bookmark className={cx('size-[18px]', saved && 'fill-primary text-primary')} /></button>
         <button type="button" aria-label="แชร์" onClick={async () => { const m = await shareLink(s.title, href); if (m) onToast?.(m); }}
           className="flex size-9 items-center justify-center rounded-xl text-indigo hover:bg-lavender-soft"><Share2 className="size-[18px]" /></button>
+        </div>
         <Link href={href} className={cx('flex h-10 items-center rounded-full px-4 text-sm font-bold',
           s.responded ? 'bg-success-soft text-success' : 'bg-indigo text-white hover:bg-indigo/90')}>
           {s.isMine ? 'ดูรายละเอียด' : s.responded ? 'ตอบแล้ว' : 'ทำแบบสอบถาม'}

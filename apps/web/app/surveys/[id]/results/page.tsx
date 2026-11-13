@@ -31,7 +31,7 @@ function Results({ id }: { id: string }) {
 
       {r.byFaculty.length > 0 && (
         <Card className="space-y-3">
-          <h3 className="font-display font-semibold">ผู้ตอบแยกตามคณะ</h3>
+          <h3 className="font-extrabold">ผู้ตอบแยกตามคณะ</h3>
           <Bars rows={r.byFaculty.map((f) => ({ label: f.faculty, count: f.count }))} total={r.responses} />
         </Card>
       )}
@@ -55,7 +55,7 @@ function QuestionCard({ n, q, total }: { n: number; q: QuestionResult; total: nu
       {q.kind === 'choice' && <Bars rows={q.question.options.map((o, i) => ({ label: o, count: q.counts[i] }))} total={q.answered} />}
       {q.kind === 'scale' && (
         <>
-          <p className="text-sm">ค่าเฉลี่ย <b className="font-display text-lg text-primary">{q.average ?? '–'}</b> / {q.question.scaleMax}</p>
+          <p className="text-sm">ค่าเฉลี่ย <b className="text-lg text-primary">{q.average ?? '–'}</b> / {q.question.scaleMax}</p>
           <Bars rows={q.counts.map((c, i) => ({ label: `${i + 1}${i === 0 && q.question.minLabel ? ` (${q.question.minLabel})` : ''}${i === q.counts.length - 1 && q.question.maxLabel ? ` (${q.question.maxLabel})` : ''}`, count: c }))} total={q.answered} />
         </>
       )}

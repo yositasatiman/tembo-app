@@ -11,6 +11,7 @@ import {
 import type { AuthUser } from '../common/auth';
 import { config } from '../config';
 import { LedgerService, Tx } from '../ledger/ledger.service';
+import { NotificationsService } from '../notifications/notifications';
 import { PrismaService } from '../prisma/prisma.service';
 
 const MIN = 60_000;
@@ -43,7 +44,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(EventsService.name);
   private timer?: NodeJS.Timeout;
 
-  constructor(private readonly prisma: PrismaService, private readonly ledger: LedgerService) {}
+  constructor(private readonly prisma: PrismaService, private readonly ledger: LedgerService, private readonly notifications: NotificationsService) {}
 
   onModuleInit() {
     if (process.env.NODE_ENV === 'test') return;
@@ -144,6 +145,9 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
         where: { id },
         data: { status: approve ? 'PUBLISHED' : 'REJECTED', reviewNote: note || null, reviewedAt: new Date() },
       });
+      await this.notifications.notify(tx, [e.organizerId], approve
+        ? { type: 'EVENT_APPROVED', title: 'Event ผ่านการตรวจแล้ว', body: `"${e.title}" ขึ้นฟีดแล้ว`, link: `/events/${id}` }
+        : { type: 'EVENT_REJECTED', title: 'Event ไม่ผ่านการตรวจ', body: `"${e.title}"${note ? ` — ${note}` : ''} · คืน Coin ทั้งหมดแล้ว`, link: `/events/${id}` });
       this.log.log(`event ${approve ? 'approved' : 'rejected'} event=${id} by admin=${adminId}`);
     });
   }
@@ -158,6 +162,9 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       // ยกเลิกก่อนแอดมินตรวจ = ค่าโพสต์ยังอยู่ใน Escrow → คืนทั้งหมด / หลังอนุมัติ ค่าโพสต์ไม่คืน
       await this.refundEscrow(tx, e, 'ผู้จัดยกเลิก');
       await tx.event.update({ where: { id }, data: { status: 'CANCELLED', cancelledAt: new Date() } });
+      const regs = await tx.eventRegistration.findMany({ where: { eventId: id, status: { not: 'CANCELLED' } }, select: { userId: true } });
+      await this.notifications.notify(tx, regs.map((r) => r.userId),
+        { type: 'EVENT_CANCELLED', title: 'Event ถูกยกเลิก', body: `ผู้จัดยกเลิก "${e.title}" แล้ว`, link: `/events/${id}` });
     });
     return this.detail(id, { id: userId, role: 'MEMBER' });
   }
@@ -182,6 +189,8 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
         } else if (e.status === 'PENDING_REVIEW' && e.startsAt <= now) {
           await this.refundEscrow(tx, e, 'ถึงเวลาเริ่มก่อนแอดมินตรวจ');
           await tx.event.update({ where: { id }, data: { status: 'REJECTED', reviewNote: 'ถึงเวลาเริ่มงานก่อนแอดมินตรวจ', reviewedAt: now } });
+          await this.notifications.notify(tx, [e.organizerId],
+            { type: 'EVENT_REJECTED', title: 'Event หมดเวลาก่อนแอดมินตรวจ', body: `"${e.title}" · คืน Coin ทั้งหมดแล้ว`, link: `/events/${id}` });
         }
       });
     }
@@ -234,7 +243,11 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       const next = e.status === 'PUBLISHED' && e.endsAt > new Date()
         ? await tx.eventRegistration.findFirst({ where: { eventId: id, status: 'WAITLISTED' }, orderBy: { createdAt: 'asc' } })
         : null;
-      if (next) await tx.eventRegistration.update({ where: { id: next.id }, data: { status: 'REGISTERED' } });
+      if (next) {
+        await tx.eventRegistration.update({ where: { id: next.id }, data: { status: 'REGISTERED' } });
+        await this.notifications.notify(tx, [next.userId],
+          { type: 'WAITLIST_PROMOTED', title: 'ได้ที่นั่งแล้ว!', body: `คุณเลื่อนจากคิวรอเป็นผู้ลงทะเบียน "${e.title}"`, link: `/events/${id}` });
+      }
       else await tx.event.update({ where: { id }, data: { registeredCount: { decrement: 1 } } });
     });
     return this.detail(id, { id: userId, role: 'MEMBER' });

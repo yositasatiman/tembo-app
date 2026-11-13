@@ -13,6 +13,7 @@ const FILTERS = [
   { key: 'all', label: 'ทั้งหมด' },
   { key: 'short', label: 'ไม่เกิน 10 ข้อ' },
   { key: 'reward', label: 'รางวัลสูง' },
+  { key: 'saved', label: 'บันทึกไว้' },
   { key: 'mine', label: 'แบบสอบถามของฉัน' },
 ] as const;
 type Filter = (typeof FILTERS)[number]['key'];
@@ -30,11 +31,12 @@ function Surveys() {
   const [rows, setRows] = useState<SurveySummary[] | null>(null);
   const [toast, setToast] = useState('');
   const mine = filter === 'mine';
+  const source = mine ? '/surveys/mine' : filter === 'saved' ? '/surveys/saved' : '/surveys';
 
   useEffect(() => {
     setRows(null);
-    api<SurveySummary[]>(mine ? '/surveys/mine' : '/surveys').then(setRows).catch(() => setRows([]));
-  }, [mine]);
+    api<SurveySummary[]>(source).then(setRows).catch(() => setRows([]));
+  }, [source]);
 
   const list = useMemo(() => {
     if (!rows) return null;
@@ -53,7 +55,7 @@ function Surveys() {
       </div>
       {list === null ? <Spinner />
         : list.length === 0 ? (
-          <EmptyState icon={<ClipboardList />} title={mine ? 'คุณยังไม่ได้โพสต์แบบสอบถาม' : 'ยังไม่มีแบบสอบถามที่เปิดรับ'}
+          <EmptyState icon={<ClipboardList />} title={mine ? 'คุณยังไม่ได้โพสต์แบบสอบถาม' : filter === 'saved' ? 'ยังไม่ได้บันทึกแบบสอบถาม' : 'ยังไม่มีแบบสอบถามที่เปิดรับ'}
             text={mine ? 'โพสต์แบบสอบถามงานวิจัย แล้วให้ Coin เป็นรางวัลกับผู้ตอบ' : 'เป็นคนแรกที่โพสต์เลย'}
             action={<Link href="/surveys/new" className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">โพสต์แบบสอบถาม</Link>} />
         ) : <div className="space-y-2.5">{list.map((s) => <SurveyCard key={s.id} s={s} onToast={setToast} />)}</div>}

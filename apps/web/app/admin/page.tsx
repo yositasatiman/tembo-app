@@ -21,7 +21,18 @@ interface PendingEvent {
 }
 
 export default function AdminPage() {
-  return <AppShell><div className="max-w-3xl space-y-8"><AdminEvents /><Admin /></div></AppShell>;
+  return (
+    <AppShell>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-[22px] font-extrabold tracking-tight">แอดมิน</h1>
+          <p className="text-xs text-muted-foreground">ตรวจ Event ก่อนขึ้นฟีด และตรวจการขอระบบสมทบของแบบสอบถาม</p>
+        </div>
+        <AdminEvents />
+        <Admin />
+      </div>
+    </AppShell>
+  );
 }
 
 function AdminEvents() {
@@ -41,7 +52,7 @@ function AdminEvents() {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="แอดมิน: ตรวจ Event" subtitle="อนุมัติแล้ว Event จะขึ้นฟีดทันทีและค่าโพสต์ถูกหัก / ไม่อนุมัติ ระบบคืน Coin ทั้งหมดให้ผู้จัด" />
+      <SectionHeader title="Event รอตรวจ" subtitle="อนุมัติแล้ว Event จะขึ้นฟีดทันทีและค่าโพสต์ถูกหัก / ไม่อนุมัติ ระบบคืน Coin ทั้งหมดให้ผู้จัด" />
       <ErrorText>{error}</ErrorText>
       {rows?.length === 0 && <Card className="py-10 text-center text-sm text-muted-foreground">ไม่มี Event รอตรวจ</Card>}
       {rows?.map((r) => (
@@ -83,12 +94,12 @@ function Admin() {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="แอดมิน: ตรวจการขอระบบสมทบ" subtitle="ตรวจว่าเป็นงานวิจัยจริงก่อนอนุมัติ — ระบบจะสร้าง Coin เข้า Escrow ทันที" />
+      <SectionHeader title="ขอระบบสมทบ" subtitle="ตรวจว่าเป็นงานวิจัยจริงก่อนอนุมัติ — ระบบจะสร้าง Coin เข้า Escrow ทันที" />
       <ErrorText>{error}</ErrorText>
       {rows?.length === 0 && <Card className="py-10 text-center text-sm text-muted-foreground">ไม่มีรายการรอตรวจ</Card>}
       {rows?.map((r) => (
         <Card key={r.id} className="space-y-3 p-6">
-          <Link href={`/surveys/${r.id}`} className="font-display font-semibold hover:text-primary">{r.title}</Link>
+          <Link href={`/surveys/${r.id}`} className="font-extrabold hover:text-primary">{r.title}</Link>
           {r.description && <p className="whitespace-pre-line text-sm">{r.description}</p>}
           <p className="text-xs text-muted-foreground">
             {r.owner.displayName} · {r.owner.faculty} · {r.owner.cmuEmail}<br />

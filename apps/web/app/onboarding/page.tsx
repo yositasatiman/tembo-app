@@ -40,7 +40,7 @@ export default function OnboardingPage() {
     <Card className="p-6">
       <form onSubmit={submit} className="space-y-5">
         <div>
-          <h2 className="font-display text-xl font-semibold">ตั้งค่าโปรไฟล์</h2>
+          <h2 className="text-xl font-extrabold">ตั้งค่าโปรไฟล์</h2>
           <p className="text-sm text-muted-foreground">ใช้จับคู่แบบสอบถามและกิจกรรมที่ตรงกับคุณ — เราเก็บเฉพาะข้อมูลที่จำเป็น</p>
         </div>
         <Input label="ชื่อที่แสดง" required maxLength={50} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />

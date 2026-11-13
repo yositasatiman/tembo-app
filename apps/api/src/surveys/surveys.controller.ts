@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import {
   CreateSurveyInput, createSurveySchema, ReviewSubsidyInput, reviewSubsidySchema,
@@ -21,6 +21,16 @@ export class SurveysController {
 
   @Get('mine')
   mine(@CurrentUser() u: AuthUser) { return this.surveys.mine(u.id); }
+
+  @Get('saved')
+  saved(@CurrentUser() u: AuthUser) { return this.surveys.saved(u.id); }
+
+  @Post(':id/save')
+  @HttpCode(200)
+  save(@CurrentUser() u: AuthUser, @Param('id') id: string) { return this.surveys.save(u.id, id, true); }
+
+  @Delete(':id/save')
+  unsave(@CurrentUser() u: AuthUser, @Param('id') id: string) { return this.surveys.save(u.id, id, false); }
 
   @Get(':id')
   detail(@CurrentUser() u: AuthUser, @Param('id') id: string) { return this.surveys.detail(id, u.id); }

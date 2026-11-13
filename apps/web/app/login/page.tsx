@@ -40,9 +40,9 @@ export default function LoginPage() {
       <div className="relative hidden overflow-hidden bg-primary p-12 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
         <div aria-hidden className="absolute -top-24 -right-20 size-96 rounded-full bg-primary-foreground/10" />
         <div aria-hidden className="absolute -bottom-32 left-10 size-72 rounded-full bg-primary-foreground/5" />
-        <span className="relative font-display text-2xl font-semibold">TEMBO</span>
+        <span className="relative text-2xl font-extrabold">TEMBO</span>
         <div className="relative space-y-6">
-          <h1 className="font-display text-4xl leading-tight font-semibold">แบบสอบถามงานวิจัยและกิจกรรม<br />ของชาว มช. ในที่เดียว</h1>
+          <h1 className="text-4xl leading-tight font-extrabold">แบบสอบถามงานวิจัยและกิจกรรม<br />ของชาว มช. ในที่เดียว</h1>
           <ul className="space-y-3 text-sm opacity-90 [&_svg]:size-5">
             <li className="flex items-center gap-3"><ClipboardList />ตอบแบบสอบถามงานวิจัย รับ Coin ทันที</li>
             <li className="flex items-center gap-3"><Coins />ใช้ Coin โพสต์แบบสอบถามของตัวเอง หาคนตอบได้เร็วขึ้น</li>
@@ -60,7 +60,7 @@ export default function LoginPage() {
       <Card className="p-6">
         {step === 'email' ? (
           <form onSubmit={requestCode} className="space-y-4">
-            <h2 className="font-display text-lg font-semibold">เข้าสู่ระบบ / สมัครสมาชิก</h2>
+            <h2 className="text-lg font-extrabold">เข้าสู่ระบบ / สมัครสมาชิก</h2>
             <Input label="อีเมล" type="email" required autoComplete="email" value={email}
               onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
             <Input label="โค้ดชวนเพื่อน (ถ้ามี)" value={referralCode} maxLength={6}
@@ -71,7 +71,7 @@ export default function LoginPage() {
           </form>
         ) : (
           <form onSubmit={verify} className="space-y-4">
-            <h2 className="font-display text-lg font-semibold">ใส่รหัส 6 หลัก</h2>
+            <h2 className="text-lg font-extrabold">ใส่รหัส 6 หลัก</h2>
             <p className="text-sm text-muted-foreground">ส่งไปที่ <b>{email}</b> แล้ว (ใช้ได้ 10 นาที)</p>
             <Input label="รหัส OTP" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required
               value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} placeholder="000000" />
