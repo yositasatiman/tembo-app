@@ -97,4 +97,14 @@ describe('Auth & profile', () => {
     await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', oldRt).expect(401);
     expect(await prisma.session.count({ where: { revokedAt: null } })).toBe(0);
   });
+
+  it('อีเมลใน ADMIN_EMAILS ได้สิทธิ์แอดมินเมื่อล็อกอิน', async () => {
+    process.env.ADMIN_EMAILS = 'Boss@Test.dev, other@test.dev';
+    try {
+      const { agent } = await login(app, prisma, mail, 'boss@test.dev');
+      expect((await agent.get('/me').expect(200)).body.role).toBe('ADMIN');
+      const { agent: normal } = await login(app, prisma, mail, 'normal@test.dev');
+      expect((await normal.get('/me').expect(200)).body.role).toBe('MEMBER');
+    } finally { delete process.env.ADMIN_EMAILS; }
+  });
 });

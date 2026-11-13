@@ -6,7 +6,9 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { config } from './config';
 
-export function configureApp(app: { use: (...a: any[]) => any; enableCors: (o: object) => void }) {
+export function configureApp(app: { use: (...a: any[]) => any; enableCors: (o: object) => void; getHttpAdapter?: () => { getInstance: () => any } }) {
+  // หลัง proxy ของ Render/Vercel: ใช้ IP จริงของผู้ใช้จาก X-Forwarded-For
+  if (config.trustProxy) app.getHttpAdapter?.().getInstance().set('trust proxy', true);
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({ origin: config.webOrigin, credentials: true });

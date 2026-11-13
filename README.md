@@ -13,6 +13,8 @@
   - [x] 5.1 แถบบน + เมนู, ฟีดรวม (ทั้งหมด / ฟีดของคุณ จับคู่ความสนใจ), หน้าแบบสอบถาม, หน้า Coin, หัวข้อของแบบสอบถาม
   - [x] 5.2 แจ้งเตือน (กระดิ่ง + หน้าแจ้งเตือน), บันทึกแบบสอบถาม, หน้าโปรไฟล์, หน้าแอดมิน
 
+ขึ้นเซิร์ฟเวอร์จริงแบบฟรี: [docs/deploy.md](docs/deploy.md) (Vercel + Render + Neon + Gmail)
+
 ดีไซน์: [Figma — TEMBO](https://www.figma.com/design/FMaJ8PxHklx4CvfaawgH3z/TEMBO) (01 — Design System คือสี/ตัวอักษร/ระยะที่ใช้ใน `apps/web/app/globals.css`)
 
 กฎ Coin: [docs/coin-rules.md](docs/coin-rules.md)

@@ -44,6 +44,10 @@ export class AuthService {
         } else throw e;
       }
     }
+    // อีเมลใน ADMIN_EMAILS ได้สิทธิ์แอดมินอัตโนมัติ (ใช้ตั้งแอดมินบนเซิร์ฟเวอร์โดยไม่ต้องรันสคริปต์)
+    if (user.role !== 'ADMIN' && config.adminEmails.includes(user.email)) {
+      user = await this.prisma.user.update({ where: { id: user.id }, data: { role: 'ADMIN' } });
+    }
     const tokens = await this.issueSession(user, userAgent);
     return { user, isNew, tokens };
   }

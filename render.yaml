@@ -1,0 +1,47 @@
+# Render Blueprint — TEMBO API (NestJS) บนแพ็กเกจฟรี
+# วิธีใช้: Render → New → Blueprint → เลือก repo นี้ (ดู docs/deploy.md)
+services:
+  - type: web
+    name: tembo-api
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm build:packages &&
+      pnpm db:deploy &&
+      pnpm db:seed &&
+      pnpm --filter @tembo/api build
+    startCommand: node apps/api/dist/main.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false          # ใส่ connection string จาก Neon
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OTP_SECRET
+        generateValue: true
+      - key: WEB_ORIGIN
+        sync: false          # URL หน้าเว็บบน Vercel เช่น https://tembo-app.vercel.app
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "true"
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        sync: false          # อีเมล Gmail ที่ใช้ส่ง OTP
+      - key: SMTP_PASS
+        sync: false          # App Password 16 ตัวของ Gmail (ไม่ใช่รหัสผ่านปกติ)
+      - key: MAIL_FROM
+        sync: false          # เช่น TEMBO <yourgmail@gmail.com>
+      - key: ADMIN_EMAILS
+        sync: false          # อีเมลแอดมิน คั่นด้วย ,
