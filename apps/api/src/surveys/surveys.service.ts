@@ -102,6 +102,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
           ownerId: userId,
           title: input.title,
           description: input.description || null,
+          tags: [...new Set(input.tags)],
           mode: input.mode,
           externalUrl: external ? input.externalUrl : null,
           completionCode: external ? randomCode() : null,
@@ -380,22 +381,26 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
 
   // ───────────── อ่าน ─────────────
 
-  private summary(s: SurveyRow, viewerId: string): SurveySummary {
+  private summary(s: SurveyRow, viewerId: string, responded = false): SurveySummary {
     const left = Math.max(0, s.quota - s.responsesCount);
     return {
-      id: s.id, isMine: s.ownerId === viewerId, mode: s.mode, title: s.title, ownerName: s.owner.displayName, ownerFaculty: s.owner.faculty, questionCount: s.questionCount,
+      id: s.id, isMine: s.ownerId === viewerId, mode: s.mode, title: s.title, description: s.description, tags: s.tags, ownerName: s.owner.displayName, ownerFaculty: s.owner.faculty, questionCount: s.questionCount,
       rewardPerResponse: s.rewardPerResponse, quota: s.quota, responsesCount: s.responsesCount,
       status: s.status, closesAt: s.closesAt.toISOString(),
       payableResponses: s.status === 'CLOSED' ? 0 : Math.min(left, Math.floor(s.escrowWallet.balance / s.rewardPerResponse)),
+      responded, createdAt: s.createdAt.toISOString(),
     };
   }
 
-  async list(viewerId: string): Promise<SurveySummary[]> {
+  async list(viewerId: string, take = 50): Promise<SurveySummary[]> {
     const rows = await this.prisma.survey.findMany({
       where: { status: 'OPEN', closesAt: { gt: new Date() } },
-      orderBy: { createdAt: 'desc' }, take: 50, include: surveyInclude,
+      orderBy: { createdAt: 'desc' }, take, include: surveyInclude,
     });
-    return rows.map((s) => this.summary(s, viewerId));
+    const done = new Set((await this.prisma.surveyResponse.findMany({
+      where: { userId: viewerId, surveyId: { in: rows.map((r) => r.id) } }, select: { surveyId: true },
+    })).map((r) => r.surveyId));
+    return rows.map((s) => this.summary(s, viewerId, done.has(s.id)));
   }
 
   async mine(userId: string): Promise<SurveySummary[]> {
@@ -416,11 +421,10 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       ? await this.prisma.surveyStart.findUnique({ where: { surveyId_userId: { surveyId: id, userId: viewerId } } })
       : null;
     return {
-      ...this.summary(s, viewerId),
+      ...this.summary(s, viewerId, hasResponded),
       externalUrl: isOwner || start ? s.externalUrl : null,
       completionCode: isOwner ? s.completionCode : null,
       myStart: start ? this.startInfo(s, viewerId, start) : null,
-      description: s.description,
       targetPool: s.targetPool,
       postFee: s.postFee,
       escrowBalance: s.escrowWallet.balance,
@@ -434,7 +438,6 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       hasResponded,
       canRespond: !blocked,
       respondBlockedReason: blocked?.reason ?? null,
-      createdAt: s.createdAt.toISOString(),
       closedAt: s.closedAt?.toISOString() ?? null,
     };
   }

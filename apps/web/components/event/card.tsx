@@ -1,13 +1,13 @@
 'use client';
 import Link from 'next/link';
-import { CalendarDays, Coins, MapPin, Share2, Users } from 'lucide-react';
+import { CalendarDays, Coins, MapPin, Share2, Sparkles, Users } from 'lucide-react';
 import type { EventSummary } from '@tembo/shared';
 import { cx } from '../ui';
 import { EventCover } from './cover';
 import { eventState, eventTimeShort, shareLink } from './util';
 
 /** การ์ด Event ตาม Figma "EVENT / Browse" */
-export function EventCard({ e, onHide, onToast }: { e: EventSummary; onHide?: (id: string) => void; onToast?: (msg: string) => void }) {
+export function EventCard({ e, onHide, onToast, reason }: { e: EventSummary; onHide?: (id: string) => void; onToast?: (msg: string) => void; reason?: string }) {
   const state = eventState(e);
   const href = `/events/${e.id}`;
   const going = e.capacity !== null && e.isFull ? 'เต็มแล้ว' : `${e.registeredCount.toLocaleString()} คนเข้าร่วม${e.capacity ? ` / ${e.capacity.toLocaleString()}` : ''}`;
@@ -20,6 +20,9 @@ export function EventCard({ e, onHide, onToast }: { e: EventSummary; onHide?: (i
     <article className="overflow-hidden rounded-2xl bg-card shadow-card">
       <Link href={href} aria-label={e.title}><EventCover e={e} className="h-[82px]" /></Link>
       <div className="space-y-1.5 px-3 pt-2.5 pb-3">
+        <p className="flex items-center gap-2 text-[11px] font-extrabold tracking-wide text-primary">
+          EVENT{reason && <span className="flex items-center gap-1 font-bold text-success"><Sparkles className="size-3.5" />{reason}</span>}
+        </p>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-sm leading-tight font-extrabold"><Link href={href} className="hover:text-primary">{e.title}</Link></h3>

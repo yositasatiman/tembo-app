@@ -31,7 +31,7 @@ export default function LoginPage() {
       const res = await post<{ isNew: boolean; me: MeResponse }>('/auth/otp/verify', {
         email, code, referralCode: referralCode.trim() || undefined,
       });
-      router.replace(res.me.onboarded ? '/surveys' : '/onboarding');
+      router.replace(res.me.onboarded ? '/feed' : '/onboarding');
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }
 

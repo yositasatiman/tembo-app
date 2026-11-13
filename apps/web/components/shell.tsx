@@ -1,13 +1,14 @@
 'use client';
-import { createContext, FormEvent, ReactNode, Suspense, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, FormEvent, ReactNode, Suspense, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  BadgeCheck, CalendarPlus, ClipboardList, Coins, LayoutGrid, LogOut, PenSquare, Search, ShieldCheck, Sparkles, Ticket,
+  BadgeCheck, CalendarDays, ChevronRight, ClipboardList, Coins, FileText, Home, LogOut, Menu, Search,
+  ShieldAlert, ShieldCheck, Ticket, UserRound,
 } from 'lucide-react';
 import type { MeResponse } from '@tembo/shared';
 import { getMe, post } from '@/lib/api';
-import { Avatar, Badge, cx, Logo, Progress, Spinner, yearLabel } from './ui';
+import { Avatar, cx, Spinner, yearLabel } from './ui';
 
 interface MeCtx { me: MeResponse; reload: () => Promise<void> }
 const Ctx = createContext<MeCtx | null>(null);
@@ -17,15 +18,7 @@ export function useMe() {
   return c;
 }
 
-const NAV = [
-  { href: '/surveys', label: 'ฟีดทั้งหมด', icon: LayoutGrid, match: (p: string, tab: string | null) => p === '/surveys' && tab !== 'mine' },
-  { href: '/surveys?tab=mine', label: 'แบบสอบถามของฉัน', icon: ClipboardList, match: (p: string, tab: string | null) => p === '/surveys' && tab === 'mine' },
-  { href: '/surveys/new', label: 'โพสต์แบบสอบถาม', icon: PenSquare, match: (p: string) => p === '/surveys/new' },
-  { href: '/events', label: 'Event ในมหาวิทยาลัย', icon: Ticket, match: (p: string) => p === '/events' || (p.startsWith('/events/') && p !== '/events/new') },
-  { href: '/events/new', label: 'สร้าง Event', icon: CalendarPlus, match: (p: string) => p === '/events/new' },
-];
-
-/** โครงหน้าหลัก: แถบบน + แถบซ้าย (เมนู, การ์ดโปรไฟล์, กิจกรรมของฉัน) ตามดีไซน์ */
+/** โครงหน้าหลักตาม Figma: แถบบน (เมนู · TEMBO · ค้นหา · โปรไฟล์) + เนื้อหาคอลัมน์เดียว */
 export function AppShell(props: { children: ReactNode; requireOnboarded?: boolean }) {
   return <Suspense fallback={<Spinner />}><Shell {...props} /></Suspense>;
 }
@@ -46,16 +39,103 @@ function Shell({ children, requireOnboarded = true }: { children: ReactNode; req
   return (
     <Ctx.Provider value={{ me, reload }}>
       <Header me={me} />
-      <div className="mx-auto max-w-[1400px] px-4 py-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-          <Sidebar me={me} />
-          <div className="min-w-0 space-y-6">
-            <MobileNav />
-            {children}
-          </div>
-        </div>
-      </div>
+      <main className="mx-auto max-w-2xl px-5 pt-4 pb-16">{children}</main>
     </Ctx.Provider>
+  );
+}
+
+// ───────────── เมนู ─────────────
+
+const MAIN_NAV = [
+  { href: '/feed', label: 'ฟีด', icon: Home, match: (p: string) => p === '/feed' },
+  { href: '/surveys', label: 'แบบสอบถาม', icon: FileText, match: (p: string) => p.startsWith('/surveys') },
+  { href: '/events', label: 'Event', icon: CalendarDays, match: (p: string) => p.startsWith('/events') },
+];
+const MORE_NAV = [
+  { href: '/coin', label: 'Coin', icon: Coins, match: (p: string) => p.startsWith('/coin') },
+  { href: '/me', label: 'โปรไฟล์', icon: UserRound, match: (p: string) => p === '/me' },
+];
+
+/** ปิด popover เมื่อคลิกข้างนอก / กด Esc / เปลี่ยนหน้า */
+function usePopover() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const path = usePathname();
+  useEffect(() => { setOpen(false); }, [path]);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  return { open, setOpen, ref };
+}
+
+function MenuItem({ href, label, icon: Icon, active, onClick }: { href?: string; label: string; icon: typeof Home; active?: boolean; onClick?: () => void }) {
+  const cls = cx('flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-bold transition-colors',
+    active ? 'bg-lavender-soft text-primary' : 'text-indigo hover:bg-lavender-soft');
+  const inner = <><Icon className={cx('size-5', active ? 'text-primary' : 'text-muted-foreground')} /><span className="flex-1 text-left">{label}</span><ChevronRight className="size-[18px] text-muted-foreground" /></>;
+  return href ? <Link href={href} className={cls}>{inner}</Link> : <button type="button" onClick={onClick} className={cls}>{inner}</button>;
+}
+
+/** Figma: TEMBO / More menu */
+function MoreMenu({ isAdmin }: { isAdmin: boolean }) {
+  const { open, setOpen, ref } = usePopover();
+  const path = usePathname();
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" aria-label="เมนู" aria-expanded={open} onClick={() => setOpen(!open)}
+        className="flex size-10 items-center justify-center rounded-xl text-indigo hover:bg-lavender-soft"><Menu className="size-6" /></button>
+      {open && (
+        <nav aria-label="เมนูหลัก" className="absolute top-12 left-0 z-50 w-[280px] space-y-0.5 rounded-2xl bg-card p-2 shadow-float">
+          {MAIN_NAV.map((n) => <MenuItem key={n.href} {...n} active={n.match(path)} />)}
+          <hr className="mx-3 my-1.5 border-border" />
+          {MORE_NAV.map((n) => <MenuItem key={n.href} {...n} active={n.match(path)} />)}
+          {isAdmin && <MenuItem href="/admin" label="แอดมิน" icon={ShieldCheck} active={path === '/admin'} />}
+        </nav>
+      )}
+    </div>
+  );
+}
+
+/** Figma: TEMBO / Avatar account menu */
+function AccountMenu({ me }: { me: MeResponse }) {
+  const { open, setOpen, ref } = usePopover();
+  const router = useRouter();
+  async function logout() {
+    await post('/auth/logout').catch(() => undefined);
+    router.replace('/login');
+  }
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" aria-label="บัญชีของฉัน" aria-expanded={open} onClick={() => setOpen(!open)} className="rounded-full ring-primary/30 hover:ring-4">
+        <Avatar name={me.displayName} size="sm" />
+      </button>
+      {open && (
+        <div className="absolute top-12 right-0 z-50 w-[300px] rounded-2xl bg-card p-2.5 shadow-float">
+          <div className="flex items-center gap-3 px-2 py-2">
+            <Avatar name={me.displayName} />
+            <div className="min-w-0 leading-tight">
+              <p className="truncate font-extrabold">{me.displayName}</p>
+              <p className="truncate text-xs text-muted-foreground">{me.faculty} · {yearLabel(me.studyYear)}</p>
+              {me.cmuVerified
+                ? <p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-success"><BadgeCheck className="size-3.5" />ยืนยันนักศึกษา มช. แล้ว</p>
+                : <Link href="/me#cmu" className="mt-1 flex items-center gap-1 text-[11px] font-bold text-warning-foreground"><ShieldAlert className="size-3.5" />ยังไม่ยืนยันอีเมล @cmu.ac.th</Link>}
+            </div>
+          </div>
+          <hr className="mx-2 my-1.5 border-border" />
+          <MenuItem href="/me" label="โปรไฟล์" icon={UserRound} />
+          <MenuItem href="/coin" label={`Coin · ${me.balance.toLocaleString()}`} icon={Coins} />
+          <MenuItem href="/surveys?tab=mine" label="แบบสอบถามของฉัน" icon={ClipboardList} />
+          <MenuItem href="/events?filter=mine" label="Event ของฉัน" icon={Ticket} />
+          {me.role === 'ADMIN' && <MenuItem href="/admin" label="แอดมิน" icon={ShieldCheck} />}
+          <hr className="mx-2 my-1.5 border-border" />
+          <MenuItem label="ออกจากระบบ" icon={LogOut} onClick={logout} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -65,120 +145,59 @@ function Header({ me }: { me: MeResponse }) {
   const [q, setQ] = useState(params.get('q') ?? '');
   function search(e: FormEvent) {
     e.preventDefault();
-    router.push(q.trim() ? `/surveys?q=${encodeURIComponent(q.trim())}` : '/surveys');
+    router.push(q.trim() ? `/feed?q=${encodeURIComponent(q.trim())}` : '/feed');
   }
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-card/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 px-4 lg:gap-6 lg:px-8">
-        <Link href="/surveys" className="shrink-0"><Logo /></Link>
-        <form onSubmit={search} className="relative flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="ค้นหาแบบสอบถาม"
-            placeholder="ค้นหาแบบสอบถาม…"
-            className="h-10 w-full rounded-xl border border-border bg-muted/60 pr-3 pl-9 text-sm outline-none placeholder:text-muted-foreground focus:bg-card focus:ring-1 focus:ring-primary" />
+    <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-xl">
+      <div className="mx-auto flex h-[58px] max-w-2xl items-center gap-2 px-3 sm:px-5">
+        <MoreMenu isAdmin={me.role === 'ADMIN'} />
+        <Link href="/feed" className="text-xl font-extrabold tracking-tight text-indigo">TEMBO</Link>
+        <form onSubmit={search} role="search" className="relative ml-auto min-w-0 flex-1 sm:max-w-[320px]">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-5 -translate-y-1/2 text-muted-foreground" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="ค้นหา" placeholder="ค้นหา"
+            className="h-[34px] w-full rounded-2xl border border-border/50 bg-[#e8e3f2]/50 pr-3 pl-9 text-[15px] outline-none placeholder:text-muted-foreground focus:border-primary focus:bg-card" />
         </form>
-        <Link href="/me" className="flex shrink-0 items-center gap-2 rounded-xl px-2 py-1 hover:bg-accent">
-          <span className="hidden items-center gap-1 rounded-full bg-primary-soft px-2.5 py-1 text-sm font-semibold text-primary-deep sm:flex">
-            <Coins className="size-4" />{me.balance.toLocaleString()}
-          </span>
-          <Avatar name={me.displayName} size="sm" />
-          <span className="hidden text-left leading-tight md:block">
-            <span className="block text-sm font-semibold">{me.displayName}</span>
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              {me.cmuVerified ? <><BadgeCheck className="size-3.5 text-primary" />{me.cmuEmail}</> : me.email}
-            </span>
-          </span>
-        </Link>
+        <AccountMenu me={me} />
       </div>
     </header>
   );
 }
 
-function NavItems({ compact = false }: { compact?: boolean }) {
-  const path = usePathname();
-  const tab = useSearchParams().get('tab');
-  return NAV.map(({ href, label, icon: Icon, match }) => {
-    const active = match(path, tab);
-    if (compact) {
-      return (
-        <Link key={href} href={href} className={cx('rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-          active ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground')}>{label}</Link>
-      );
-    }
-    return (
-      <Link key={href} href={href} className={cx('flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
-        active ? 'bg-primary text-primary-foreground shadow-card' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')}>
-        <Icon className="size-4" />{label}
-      </Link>
-    );
-  });
-}
+// ───────────── แท็บฟีด (ใช้ทั้งหน้า ฟีด / แบบสอบถาม / Event) ─────────────
 
-function MobileNav() {
-  return <div className="flex flex-wrap gap-2 lg:hidden"><NavItems compact /></div>;
-}
+const FEED_TABS = [
+  { key: 'all', label: 'ทั้งหมด', href: '/feed' },
+  { key: 'foryou', label: 'ฟีดของคุณ', href: '/feed?tab=foryou' },
+  { key: 'survey', label: 'แบบสอบถาม', href: '/surveys' },
+  { key: 'event', label: 'Event', href: '/events' },
+] as const;
 
-/** ความครบของโปรไฟล์: ชื่อ คณะ ชั้นปี ความสนใจ ยืนยัน CMU */
-function completeness(me: MeResponse) {
-  const parts = [!!me.displayName, !!me.faculty, !!me.studyYear, me.interests.length > 0, me.cmuVerified];
-  return Math.round((parts.filter(Boolean).length / parts.length) * 100);
-}
-
-function Sidebar({ me }: { me: MeResponse }) {
-  const router = useRouter();
-  const pct = completeness(me);
-  async function logout() {
-    await post('/auth/logout').catch(() => undefined);
-    router.replace('/login');
-  }
+/** Figma: Feed tabs — แท็บที่เลือกพื้นน้ำเงินเข้ม */
+export function FeedTabs({ active }: { active: (typeof FEED_TABS)[number]['key'] }) {
   return (
-    <aside className="hidden space-y-4 lg:sticky lg:top-20 lg:block lg:self-start">
-      <nav className="tembo-card space-y-0.5 p-2" aria-label="เมนู"><NavItems /></nav>
-
-      <div className="tembo-card p-5">
-        <div className="flex items-center gap-3">
-          <Avatar name={me.displayName} />
-          <div className="min-w-0">
-            <p className="truncate font-display text-sm font-semibold">{me.displayName}</p>
-            <p className="truncate text-xs text-muted-foreground">{me.faculty} · {yearLabel(me.studyYear)}</p>
-          </div>
-        </div>
-        {me.cmuVerified
-          ? <Badge className="mt-4"><BadgeCheck />สมาชิกที่ยืนยัน CMU แล้ว</Badge>
-          : <Link href="/me#cmu" className="mt-4 inline-flex"><Badge tone="warning"><ShieldCheck />ยืนยันอีเมล @cmu.ac.th</Badge></Link>}
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">ความครบของโปรไฟล์</span>
-            <span className="font-semibold text-primary">{pct}%</span>
-          </div>
-          <Progress value={pct} />
-          {pct < 100 && <p className="text-[11px] text-muted-foreground">{me.cmuVerified ? 'เพิ่มข้อมูลโปรไฟล์ให้ครบเพื่อการจับคู่ที่แม่นขึ้น' : 'ยืนยันอีเมล CMU เพื่อรับ Coin จากการตอบแบบสอบถาม'}</p>}
-        </div>
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {me.interests.map((i) => <span key={i} className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">{i}</span>)}
-        </div>
-      </div>
-
-      <div className="tembo-card space-y-3 p-5">
-        <p className="font-display text-sm font-semibold">กิจกรรมของฉัน</p>
-        <Stat icon={<Coins />} label="Coin คงเหลือ" value={me.balance.toLocaleString()} />
-        <Stat icon={<Sparkles />} label="ตอบแบบสอบถามแล้ว" value={me.stats.responses} />
-        <Stat icon={<ClipboardList />} label="แบบสอบถามที่โพสต์" value={me.stats.surveysPosted} />
-        <div className="flex items-center justify-between border-t border-border pt-3 text-xs">
-          {me.role === 'ADMIN' ? <Link href="/admin" className="font-semibold text-primary hover:underline">หน้าแอดมิน</Link> : <span />}
-          <button onClick={logout} className="flex items-center gap-1 text-muted-foreground hover:text-foreground"><LogOut className="size-3.5" />ออกจากระบบ</button>
-        </div>
-      </div>
-    </aside>
+    <nav aria-label="ประเภทฟีด" className="-mx-5 flex gap-[7px] overflow-x-auto px-5 pb-0.5">
+      {FEED_TABS.map((t) => (
+        <Link key={t.key} href={t.href} aria-current={active === t.key ? 'page' : undefined}
+          className={cx('shrink-0 rounded-full px-3 py-2 text-xs font-bold whitespace-nowrap',
+            active === t.key ? 'bg-indigo text-white' : 'bg-card text-muted-foreground hover:text-indigo')}>{t.label}</Link>
+      ))}
+    </nav>
   );
 }
 
-function Stat({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
+/** หัวหน้า: ชื่อ + ปุ่มสร้าง + Coin (Figma: Results heading) */
+export function PageHeading({ title, subtitle, create }: { title: string; subtitle?: string; create?: { href: string; label: string } }) {
+  const { me } = useMe();
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="flex size-8 items-center justify-center rounded-xl bg-accent text-accent-foreground [&_svg]:size-4">{icon}</span>
-      <span className="flex-1 text-muted-foreground">{label}</span>
-      <span className="font-semibold">{value}</span>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="min-w-0 truncate text-[22px] font-extrabold tracking-tight">{title}</h1>
+        <div className="flex shrink-0 items-center gap-2">
+          {create && <Link href={create.href} className="rounded-full bg-primary px-3 py-2 text-[13px] font-bold text-white hover:bg-primary/90">{create.label} +</Link>}
+          <Link href="/coin" className="flex items-center gap-1 rounded-full bg-coin-soft px-3 py-2 text-[13px] font-bold"><Coins className="size-4 text-warning" />{me.balance.toLocaleString()}</Link>
+        </div>
+      </div>
+      {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
     </div>
   );
 }

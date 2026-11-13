@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Query, Get, HttpCode, Patch, Post, UseGuards } from '@nestjs/common';
 import {
   RequestCmuEmailInput, requestCmuEmailSchema, UpdateProfileInput, updateProfileSchema,
   VerifyCmuEmailInput, verifyCmuEmailSchema,
@@ -36,7 +36,8 @@ export class UsersController {
   }
 
   @Get('wallet')
-  wallet(@CurrentUser() u: AuthUser) {
-    return this.users.wallet(u.id);
+  wallet(@CurrentUser() u: AuthUser, @Query('limit') limit?: string, @Query('before') before?: string) {
+    const b = before ? new Date(before) : undefined;
+    return this.users.wallet(u.id, Number(limit) || 20, b && !Number.isNaN(b.getTime()) ? b : undefined);
   }
 }

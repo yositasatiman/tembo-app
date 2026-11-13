@@ -2,10 +2,10 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CalendarDays, Coins, Plus } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { EVENT_CATEGORY_LABEL, EVENT_FILTERS, type EventFilter, type EventSummary } from '@tembo/shared';
 import { api, post } from '@/lib/api';
-import { AppShell, useMe } from '@/components/shell';
+import { AppShell, FeedTabs, PageHeading } from '@/components/shell';
 import { EventCard } from '@/components/event/card';
 import { Chip, EmptyState, Spinner, Toast } from '@/components/ui';
 
@@ -17,7 +17,6 @@ export default function EventsPage() {
 
 /** ตาม Figma "EVENT / Browse" */
 function Browse() {
-  const { me } = useMe();
   const router = useRouter();
   const params = useSearchParams();
   const raw = params.get('filter') ?? 'all';
@@ -47,17 +46,11 @@ function Browse() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-[22px] font-extrabold tracking-tight">{q ? `ผลการค้นหา “${q}”` : 'ค้นพบ Event'}</h1>
-        <div className="flex items-center gap-2">
-          <Link href="/events/new" className="flex items-center gap-1 rounded-full bg-primary px-3 py-2 text-[13px] font-bold text-white hover:bg-primary/90"><Plus className="size-4" />สร้าง</Link>
-          <span className="flex items-center gap-1 rounded-full bg-coin-soft px-3 py-2 text-[13px] font-bold"><Coins className="size-4 text-warning" />{me.balance.toLocaleString()} Coin</span>
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">พบเพื่อนใหม่ เรียนรู้ และออกไปสำรวจรอบ มช.</p>
+    <div className="space-y-3">
+      <PageHeading title={q ? `ค้นหา “${q}”` : 'ค้นพบ Event'} subtitle="พบเพื่อนใหม่ เรียนรู้ และออกไปสำรวจรอบ มช." create={{ href: '/events/new', label: 'สร้าง' }} />
+      <FeedTabs active="event" />
 
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="tablist" aria-label="ประเภท Event">
+      <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-0.5" role="tablist" aria-label="ประเภท Event">
         {EVENT_FILTERS.map((f) => <Chip key={f} active={filter === f} onClick={() => setFilter(f)}>{FILTER_LABEL[f]}</Chip>)}
       </div>
 

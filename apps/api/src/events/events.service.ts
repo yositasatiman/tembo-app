@@ -346,6 +346,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       isOrganizer: e.organizerId === viewerId,
       myStatus: myStatus === 'CANCELLED' ? null : myStatus,
       myCheckedIn: !!mine?.checkedInAt,
+      createdAt: e.createdAt.toISOString(),
     };
   }
 
@@ -415,7 +416,6 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       rewardSlots: e.rewardSlots,
       rewardedCount: e.rewardedCount,
       reviewNote: isOrganizer || viewer.role === 'ADMIN' ? e.reviewNote : null,
-      createdAt: e.createdAt.toISOString(),
     };
   }
 

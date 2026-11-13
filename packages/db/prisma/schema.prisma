@@ -203,6 +203,8 @@ model Survey {
   owner             User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   title             String
   description       String?
+  /// หัวข้อจากรายการความสนใจ (INTERESTS) — ใช้จับคู่ฟีด
+  tags              String[]      @default([])
   mode              SurveyMode    @default(IN_APP)
   /// ลิงก์แบบสอบถามภายนอก (mode = EXTERNAL)
   externalUrl       String?

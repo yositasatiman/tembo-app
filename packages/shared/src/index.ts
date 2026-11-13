@@ -232,6 +232,7 @@ export const createSurveySchema = z.object({
   title: z.string().trim().min(3, 'ชื่ออย่างน้อย 3 ตัวอักษร').max(150),
   description: z.string().trim().max(2000).optional(),
   mode: z.enum(SURVEY_MODES).default('IN_APP'),
+  tags: z.array(z.enum(INTERESTS)).max(5, 'เลือกได้ไม่เกิน 5 หัวข้อ').default([]),
   questions: z.array(questionInputSchema).max(SURVEY_RULES.MAX_QUESTIONS, `ไม่เกิน ${SURVEY_RULES.MAX_QUESTIONS} คำถาม`).default([]),
   /** EXTERNAL เท่านั้น */
   externalUrl: httpsUrlSchema.optional(),
@@ -287,6 +288,8 @@ export interface SurveySummary {
   isMine: boolean;
   mode: SurveyMode;
   title: string;
+  description: string | null;
+  tags: string[];
   ownerName: string | null;
   ownerFaculty: string | null;
   questionCount: number;
@@ -297,10 +300,12 @@ export interface SurveySummary {
   closesAt: string;
   /** จ่ายได้อีกกี่คนจาก Coin ที่อยู่ใน Escrow ตอนนี้ */
   payableResponses: number;
+  /** ผู้ดูตอบแล้วหรือยัง */
+  responded: boolean;
+  createdAt: string;
 }
 
 export interface SurveyDetail extends SurveySummary {
-  description: string | null;
   targetPool: number;
   postFee: number;
   escrowBalance: number;
@@ -312,11 +317,11 @@ export interface SurveyDetail extends SurveySummary {
   remainingToFund: number;
   isOwner: boolean;
   myContribution: number;
+  /** เท่ากับ responded (คงไว้ให้หน้าเดิมใช้) */
   hasResponded: boolean;
   canRespond: boolean;
   /** เหตุผลที่ตอบไม่ได้ (ถ้ามี) */
   respondBlockedReason: string | null;
-  createdAt: string;
   closedAt: string | null;
   /** EXTERNAL: ผู้โพสต์เห็นเสมอ / ผู้ตอบเห็นหลังกดเริ่ม */
   externalUrl: string | null;
@@ -436,6 +441,7 @@ export interface EventSummary {
   isOrganizer: boolean;
   myStatus: RegistrationStatus | null;
   myCheckedIn: boolean;
+  createdAt: string;
 }
 
 export interface EventDetail extends EventSummary {
@@ -461,9 +467,57 @@ export interface EventDetail extends EventSummary {
   rewardSlots: number;
   rewardedCount: number;
   reviewNote: string | null;
-  createdAt: string;
 }
 
 export interface EventAttendee { name: string | null; faculty: string | null; status: RegistrationStatus; checkedInAt: string | null; registeredAt: string }
 export interface CheckInCodeResponse { code: string; expiresInSec: number; checkInUrl: string }
 export interface CheckInResponse { checkedInAt: string; reward: number; balance: number; note: string | null }
+
+// ───────────────────────── ฟีดรวม + จับคู่ความสนใจ (ขั้นที่ 5) ─────────────────────────
+
+export const FEED_TABS = ['all', 'foryou'] as const;
+export type FeedTab = (typeof FEED_TABS)[number];
+
+export type FeedItem =
+  | { kind: 'survey'; id: string; score: number; reasons: string[]; survey: SurveySummary }
+  | { kind: 'event'; id: string; score: number; reasons: string[]; event: EventSummary };
+
+export interface FeedViewer { interests: string[]; faculty: string | null }
+
+/**
+ * คะแนนจับคู่ของโพสต์ในฟีด "ฟีดของคุณ" (docs/coin-rules.md ข้อ 1: รางวัลสูงช่วยดันฟีด แต่เป็นแค่ปัจจัยหนึ่ง)
+ * - ตรงกับความสนใจ: 2 ต่อหัวข้อ (สูงสุด 3 หัวข้อ)
+ * - แบบสอบถามจากคณะเดียวกัน: +1
+ * - รางวัล: แบบสอบถาม 0–1.5 ตามสัดส่วนกับค่าแนะนำ / Event ที่ยังมีรางวัลเช็กอิน +0.5
+ * - ใกล้ปิดรับ (48 ชม.) / Event เริ่มภายใน 3 วัน: +0.5
+ * ความตรงกับความสนใจหนักกว่ารางวัลเสมอ คนที่ลง Coin เยอะจึงดันได้ไม่เกินโพสต์ที่ตรงความสนใจ 1 หัวข้อ
+ */
+export function scoreFeedItem(item: { kind: 'survey'; survey: SurveySummary } | { kind: 'event'; event: EventSummary }, viewer: FeedViewer, now = Date.now()) {
+  const tags = item.kind === 'survey' ? item.survey.tags : item.event.tags;
+  const matched = tags.filter((t) => viewer.interests.includes(t)).slice(0, 3);
+  const reasons = matched.map((t) => `สนใจ${t}`);
+  let score = matched.length * 2;
+  let relevant = matched.length > 0;
+  if (item.kind === 'survey') {
+    const s = item.survey;
+    if (viewer.faculty && s.ownerFaculty === viewer.faculty) { score += 1; relevant = true; reasons.push('คณะเดียวกับคุณ'); }
+    const band = surveyBand(s.questionCount);
+    if (band) score += Math.min(1.5, s.rewardPerResponse / band.suggestedReward);
+    if (new Date(s.closesAt).getTime() - now < 48 * 3_600_000) { score += 0.5; reasons.push('ใกล้ปิดรับ'); }
+  } else {
+    const e = item.event;
+    if (e.rewardPerCheckIn > 0 && e.rewardsLeft > 0) score += 0.5;
+    if (new Date(e.startsAt).getTime() - now < 3 * 86_400_000) { score += 0.5; reasons.push('เร็ว ๆ นี้'); }
+  }
+  return { score: Math.round(score * 100) / 100, relevant, reasons };
+}
+
+// ───────────────────────── กระเป๋า Coin ─────────────────────────
+
+export type TxType = 'SIGNUP_BONUS' | 'ADMIN_ADJUST' | 'POST_FEE' | 'ESCROW_FUND' | 'SUBSIDY' | 'SURVEY_REWARD' | 'ESCROW_REFUND' | 'EVENT_REWARD';
+export const TX_LABEL: Record<TxType, string> = {
+  SIGNUP_BONUS: 'โบนัสสมัครสมาชิก', ADMIN_ADJUST: 'ปรับยอดโดยแอดมิน', POST_FEE: 'ค่าโพสต์', ESCROW_FUND: 'ลง Coin รางวัล',
+  SUBSIDY: 'ระบบสมทบ', SURVEY_REWARD: 'รางวัลตอบแบบสอบถาม', ESCROW_REFUND: 'คืน Coin', EVENT_REWARD: 'รางวัลเช็กอิน Event',
+};
+export interface WalletEntry { id: string; delta: number; type: TxType; memo: string | null; createdAt: string }
+export interface WalletResponse { balance: number; earned: number; spent: number; entries: WalletEntry[]; nextBefore: string | null }

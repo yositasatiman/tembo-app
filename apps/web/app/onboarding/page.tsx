@@ -30,7 +30,7 @@ export default function OnboardingPage() {
     setError(''); setLoading(true);
     try {
       await patch<MeResponse>('/me/profile', { displayName, faculty, studyYear, interests });
-      router.replace('/surveys');
+      router.replace('/feed');
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }
 

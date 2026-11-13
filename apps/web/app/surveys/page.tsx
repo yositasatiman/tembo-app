@@ -1,96 +1,63 @@
 'use client';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { ArrowRight, Plus, Sparkles } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ClipboardList } from 'lucide-react';
 import type { SurveySummary } from '@tembo/shared';
 import { api } from '@/lib/api';
-import { AppShell, useMe } from '@/components/shell';
+import { AppShell, FeedTabs, PageHeading } from '@/components/shell';
 import { SurveyCard } from '@/components/survey/card';
-import { buttonCls, Card, SectionHeader, Spinner } from '@/components/ui';
-import { EventCard } from '@/components/event/card';
-import type { EventSummary } from '@tembo/shared';
+import { Chip, EmptyState, Spinner, Toast } from '@/components/ui';
+
+const FILTERS = [
+  { key: 'all', label: 'ทั้งหมด' },
+  { key: 'short', label: 'ไม่เกิน 10 ข้อ' },
+  { key: 'reward', label: 'รางวัลสูง' },
+  { key: 'mine', label: 'แบบสอบถามของฉัน' },
+] as const;
+type Filter = (typeof FILTERS)[number]['key'];
 
 export default function SurveysPage() {
-  return <AppShell><Suspense fallback={<Spinner />}><Feed /></Suspense></AppShell>;
+  return <AppShell><Suspense fallback={<Spinner />}><Surveys /></Suspense></AppShell>;
 }
 
-function Feed() {
-  const { me } = useMe();
+/** Figma: SURVEY / discovery */
+function Surveys() {
+  const router = useRouter();
   const params = useSearchParams();
-  const tab = params.get('tab') === 'mine' ? 'mine' : 'open';
-  const q = (params.get('q') ?? '').trim().toLowerCase();
+  const raw = params.get('tab') ?? 'all';
+  const filter: Filter = FILTERS.some((f) => f.key === raw) ? (raw as Filter) : 'all';
   const [rows, setRows] = useState<SurveySummary[] | null>(null);
+  const [toast, setToast] = useState('');
+  const mine = filter === 'mine';
 
   useEffect(() => {
     setRows(null);
-    api<SurveySummary[]>(tab === 'mine' ? '/surveys/mine' : '/surveys').then(setRows).catch(() => setRows([]));
-  }, [tab]);
+    api<SurveySummary[]>(mine ? '/surveys/mine' : '/surveys').then(setRows).catch(() => setRows([]));
+  }, [mine]);
 
   const list = useMemo(() => {
     if (!rows) return null;
-    const filtered = q ? rows.filter((s) => `${s.title} ${s.ownerName ?? ''} ${s.ownerFaculty ?? ''}`.toLowerCase().includes(q)) : rows;
-    if (tab === 'mine') return filtered;
-    // คณะเดียวกันขึ้นก่อน แล้วตามด้วยใกล้ปิดก่อน (การจับคู่เต็มรูปแบบมาในขั้นที่ 5)
-    return [...filtered].sort((a, b) =>
-      Number(b.ownerFaculty === me.faculty) - Number(a.ownerFaculty === me.faculty) || a.closesAt.localeCompare(b.closesAt));
-  }, [rows, q, tab, me.faculty]);
-
-  const sameFaculty = rows?.filter((s) => s.ownerFaculty === me.faculty).length ?? 0;
+    if (filter === 'short') return rows.filter((s) => s.questionCount <= 10);
+    if (filter === 'reward') return [...rows].sort((a, b) => b.rewardPerResponse - a.rewardPerResponse);
+    if (filter === 'all') return [...rows].sort((a, b) => Number(a.responded) - Number(b.responded));
+    return rows;
+  }, [rows, filter]);
 
   return (
-    <>
-      {tab === 'open' && !q && (
-        <div className="relative overflow-hidden rounded-3xl bg-primary p-6 text-primary-foreground shadow-float">
-          <div aria-hidden className="absolute -top-16 -right-10 size-56 rounded-full bg-primary-foreground/10" />
-          <div aria-hidden className="absolute right-24 -bottom-20 size-40 rounded-full bg-primary-foreground/5" />
-          <div className="relative flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="flex items-center gap-2 text-xs font-medium tracking-wide opacity-80"><Sparkles className="size-4" />แนะนำสำหรับคุณ</p>
-              <h1 className="mt-2 font-display text-xl leading-snug font-semibold sm:text-2xl">
-                {rows ? `${rows.length} แบบสอบถามเปิดรับอยู่` : 'กำลังหาแบบสอบถาม…'}
-                {sameFaculty > 0 && ` · ${sameFaculty} จากคณะ${me.faculty}`}
-              </h1>
-              <p className="mt-1 max-w-xl text-sm opacity-85">
-                เรียงจากคณะเดียวกับคุณก่อน แล้วตามด้วยแบบสอบถามที่ใกล้ปิดรับ · ความสนใจของคุณ: {me.interests.join(', ')}
-              </p>
-            </div>
-            <Link href="/onboarding" className="flex items-center gap-2 rounded-xl bg-primary-foreground/15 px-4 py-2.5 text-sm font-medium backdrop-blur transition-colors hover:bg-primary-foreground/25">
-              ปรับความสนใจ<ArrowRight className="size-4" />
-            </Link>
-          </div>
-        </div>
-      )}
-
-      <section className="space-y-4">
-        <SectionHeader
-          title={tab === 'mine' ? 'แบบสอบถามของฉัน' : q ? `ผลการค้นหา “${params.get('q')}”` : 'แบบสอบถามงานวิจัย'}
-          subtitle={tab === 'mine' ? 'ติดตามจำนวนผู้ตอบและ Coin ที่เหลือใน Escrow' : 'งานวิจัยของชาว มช. รางวัล Coin ถูกล็อกไว้ใน Escrow ก่อนเปิดรับ'}
-          action={<Link href="/surveys/new" className={buttonCls('outline', 'sm')}><Plus />โพสต์แบบสอบถาม</Link>}
-        />
-        {list === null ? <Spinner />
-          : list.length === 0 ? (
-            <Card className="py-10 text-center text-sm text-muted-foreground">
-              {tab === 'mine' ? 'คุณยังไม่ได้โพสต์แบบสอบถาม' : q ? 'ไม่พบแบบสอบถามที่ตรงกับคำค้น' : 'ยังไม่มีแบบสอบถามที่เปิดรับ — เป็นคนแรกที่โพสต์เลย'}
-            </Card>
-          ) : list.map((s) => <SurveyCard key={s.id} s={s} myFaculty={me.faculty} mine={tab === 'mine'} />)}
-      </section>
-
-      {tab === 'open' && !q && <UpcomingEvents />}
-    </>
-  );
-}
-
-/** Event ที่กำลังจะมาถึง 3 งานแรก */
-function UpcomingEvents() {
-  const [rows, setRows] = useState<EventSummary[] | null>(null);
-  useEffect(() => { api<EventSummary[]>('/events').then((r) => setRows(r.slice(0, 3))).catch(() => setRows([])); }, []);
-  if (rows !== null && rows.length === 0) return null;
-  return (
-    <section className="space-y-4">
-      <SectionHeader title="Event ในมหาวิทยาลัย" subtitle="งานคณะ กิจกรรมชมรม และเวิร์กช็อปรอบ มช."
-        action={<Link href="/events" className={buttonCls('outline', 'sm')}>ดูทั้งหมด<ArrowRight /></Link>} />
-      {rows === null ? <Spinner /> : <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{rows.map((e) => <EventCard key={e.id} e={e} />)}</div>}
-    </section>
+    <div className="space-y-3">
+      <PageHeading title="แบบสอบถาม" subtitle="แบ่งปันความคิดเห็นแล้วรับ Coin" create={{ href: '/surveys/new', label: 'สร้าง' }} />
+      <FeedTabs active="survey" />
+      <div role="tablist" aria-label="ตัวกรอง" className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-0.5">
+        {FILTERS.map((f) => <Chip key={f.key} active={filter === f.key} onClick={() => router.replace(f.key === 'all' ? '/surveys' : `/surveys?tab=${f.key}`)}>{f.label}</Chip>)}
+      </div>
+      {list === null ? <Spinner />
+        : list.length === 0 ? (
+          <EmptyState icon={<ClipboardList />} title={mine ? 'คุณยังไม่ได้โพสต์แบบสอบถาม' : 'ยังไม่มีแบบสอบถามที่เปิดรับ'}
+            text={mine ? 'โพสต์แบบสอบถามงานวิจัย แล้วให้ Coin เป็นรางวัลกับผู้ตอบ' : 'เป็นคนแรกที่โพสต์เลย'}
+            action={<Link href="/surveys/new" className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">โพสต์แบบสอบถาม</Link>} />
+        ) : <div className="space-y-2.5">{list.map((s) => <SurveyCard key={s.id} s={s} onToast={setToast} />)}</div>}
+      {toast && <Toast onClose={() => setToast('')}>{toast}</Toast>}
+    </div>
   );
 }

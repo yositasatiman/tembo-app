@@ -1,7 +1,7 @@
 'use client';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { quoteSurvey, SURVEY_RULES, surveyBand, type QuestionInput, type SurveyDetail, type SurveyMode, type SurveyQuoteResponse } from '@tembo/shared';
+import { INTERESTS, quoteSurvey, SURVEY_RULES, surveyBand, type QuestionInput, type SurveyDetail, type SurveyMode, type SurveyQuoteResponse } from '@tembo/shared';
 import { ClipboardList, Link2, ShieldCheck } from 'lucide-react';
 import { newQuestion, QuestionBuilder } from '@/components/survey/builder';
 import { api, post } from '@/lib/api';
@@ -21,6 +21,7 @@ function NewSurvey() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [mode, setMode] = useState<SurveyMode>('IN_APP');
+  const [tags, setTags] = useState<string[]>([]);
   const [questions, setQuestions] = useState<QuestionInput[]>(() => [newQuestion()]);
   const [externalUrl, setExternalUrl] = useState('');
   const [externalCount, setExternalCount] = useState(10);
@@ -63,7 +64,7 @@ function NewSurvey() {
     setError(''); setLoading(true);
     try {
       const s = await post<SurveyDetail>('/surveys', {
-        title, description: description || undefined, mode, rewardPerResponse: reward, quota,
+        title, description: description || undefined, mode, tags, rewardPerResponse: reward, quota,
         ...(mode === 'EXTERNAL' ? { questions: [], externalUrl: externalUrl.trim(), externalQuestionCount: externalCount } : { questions }),
         closesAt: new Date(closesAt).toISOString(), ownerContribution, requestSubsidy,
       });
@@ -86,6 +87,16 @@ function NewSurvey() {
           <Field label="รายละเอียด (ไม่บังคับ)">
             <textarea className={inputCls} rows={3} maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="ใครควรตอบ ใช้เวลากี่นาที ข้อมูลจะถูกใช้อย่างไร" />
           </Field>
+          <div>
+            <span className="mb-1.5 block text-sm font-medium">หัวข้อ <span className="font-normal text-muted-foreground">(ไม่เกิน 5 — แสดงในฟีดของคนที่สนใจเรื่องนี้)</span></span>
+            <div className="flex flex-wrap gap-1.5">
+              {INTERESTS.map((t) => (
+                <button key={t} type="button" aria-pressed={tags.includes(t)}
+                  onClick={() => setTags((cur) => cur.includes(t) ? cur.filter((x) => x !== t) : cur.length >= 5 ? cur : [...cur, t])}
+                  className={`rounded-full px-3 py-1.5 text-xs font-bold ${tags.includes(t) ? 'bg-primary text-white' : 'bg-lavender-soft text-primary'}`}>{t}</button>
+              ))}
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="รางวัล/คน (Coin)" hint={band ? `${questionCount} ข้อ · ขั้นต่ำ ${band.minReward} · แนะนำ ${band.suggestedReward}` : undefined}>
               <input type="number" className={inputCls} min={band?.minReward ?? 1} max={SURVEY_RULES.MAX_REWARD} required value={reward} onChange={(e) => { setRewardTouched(true); setReward(Number(e.target.value)); }} />
