@@ -174,3 +174,19 @@ export function Banner({ tone, icon, title, children }: { tone: 'success' | 'dan
     </div>
   );
 }
+
+/** หน้าต่างกลางจอ (Figma: Checking / Unable to Verify / Reward received) */
+export function Modal({ children, onClose, label }: { children: ReactNode; onClose?: () => void; label: string }) {
+  useEffect(() => {
+    if (!onClose) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-indigo/30 p-5 backdrop-blur-[2px]" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={label} onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-3xl bg-card p-6 text-center shadow-float">{children}</div>
+    </div>
+  );
+}

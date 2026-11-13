@@ -1,7 +1,8 @@
 'use client';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { quoteSurvey, SURVEY_RULES, surveyBand, type QuestionInput, type SurveyDetail, type SurveyQuoteResponse } from '@tembo/shared';
+import { quoteSurvey, SURVEY_RULES, surveyBand, type QuestionInput, type SurveyDetail, type SurveyMode, type SurveyQuoteResponse } from '@tembo/shared';
+import { ClipboardList, Link2, ShieldCheck } from 'lucide-react';
 import { newQuestion, QuestionBuilder } from '@/components/survey/builder';
 import { api, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
@@ -19,8 +20,11 @@ function NewSurvey() {
   const [info, setInfo] = useState<SurveyQuoteResponse | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [mode, setMode] = useState<SurveyMode>('IN_APP');
   const [questions, setQuestions] = useState<QuestionInput[]>(() => [newQuestion()]);
-  const questionCount = questions.length;
+  const [externalUrl, setExternalUrl] = useState('');
+  const [externalCount, setExternalCount] = useState(10);
+  const questionCount = mode === 'EXTERNAL' ? externalCount : questions.length;
   const [reward, setReward] = useState(5);
   const [rewardTouched, setRewardTouched] = useState(false);
   const [quota, setQuota] = useState(30);
@@ -59,7 +63,8 @@ function NewSurvey() {
     setError(''); setLoading(true);
     try {
       const s = await post<SurveyDetail>('/surveys', {
-        title, description: description || undefined, questions, rewardPerResponse: reward, quota,
+        title, description: description || undefined, mode, rewardPerResponse: reward, quota,
+        ...(mode === 'EXTERNAL' ? { questions: [], externalUrl: externalUrl.trim(), externalQuestionCount: externalCount } : { questions }),
         closesAt: new Date(closesAt).toISOString(), ownerContribution, requestSubsidy,
       });
       router.replace(`/surveys/${s.id}`);
@@ -71,6 +76,10 @@ function NewSurvey() {
   return (
     <div className="max-w-3xl">
       <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="วิธีสร้างแบบสอบถาม">
+          <ModeButton active={mode === 'IN_APP'} onClick={() => setMode('IN_APP')} icon={<ClipboardList />} title="สร้างคำถามใน TEMBO" text="ตอบในแอป ดูผลและ CSV ได้ทันที" />
+          <ModeButton active={mode === 'EXTERNAL'} onClick={() => setMode('EXTERNAL')} icon={<Link2 />} title="ใช้ลิงก์ Google Form" text="ผู้ตอบกรอกรหัสยืนยันเพื่อรับ Coin" />
+        </div>
         <Card className="space-y-4 p-6">
           <div><h1 className="font-display text-xl font-semibold">โพสต์แบบสอบถามงานวิจัย</h1><p className="text-sm text-muted-foreground">รางวัล Coin จะถูกล็อกไว้ใน Escrow และจ่ายให้ผู้ตอบแต่ละคนอัตโนมัติ</p></div>
           <Field label="ชื่อแบบสอบถาม"><input className={inputCls} required minLength={3} maxLength={150} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
@@ -90,13 +99,38 @@ function NewSurvey() {
           </div>
         </Card>
 
-        <Card className="space-y-4 p-6">
-          <div>
-            <h3 className="font-display font-semibold">คำถาม ({questionCount}/{SURVEY_RULES.MAX_QUESTIONS})</h3>
-            <p className="text-sm text-muted-foreground">จำนวนข้อมีผลกับรางวัลขั้นต่ำและค่าโพสต์</p>
-          </div>
-          <QuestionBuilder value={questions} onChange={setQuestions} />
-        </Card>
+        {mode === 'IN_APP' ? (
+          <Card className="space-y-4 p-6">
+            <div>
+              <h3 className="font-display font-semibold">คำถาม ({questionCount}/{SURVEY_RULES.MAX_QUESTIONS})</h3>
+              <p className="text-sm text-muted-foreground">จำนวนข้อมีผลกับรางวัลขั้นต่ำและค่าโพสต์</p>
+            </div>
+            <QuestionBuilder value={questions} onChange={setQuestions} />
+          </Card>
+        ) : (
+          <Card className="space-y-4 p-6">
+            <div className="flex gap-3">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-lavender text-primary"><Link2 className="size-5" /></span>
+              <div>
+                <h3 className="text-lg font-extrabold">ลิงก์แบบสอบถามของคุณ</h3>
+                <p className="text-xs text-muted-foreground">ผู้ตอบจะเปิดลิงก์นี้หลังกดเริ่มทำแบบสอบถามใน TEMBO</p>
+              </div>
+            </div>
+            <Field label="ลิงก์แบบสอบถาม *"><input type="url" required className={inputCls} value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} placeholder="https://forms.gle/…" /></Field>
+            <Field label="จำนวนข้อในแบบสอบถาม *" hint="ใช้คิดรางวัลขั้นต่ำและค่าโพสต์ ให้ตรงกับฟอร์มจริง">
+              <input type="number" required className={inputCls} min={1} max={SURVEY_RULES.MAX_QUESTIONS} value={externalCount} onChange={(e) => setExternalCount(Number(e.target.value))} />
+            </Field>
+            <div className="rounded-xl bg-coin-soft p-4 text-sm text-indigo">
+              <p className="font-extrabold">ก่อนโพสต์</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px]">
+                <li>ตั้งให้ทุกคนที่มีลิงก์ตอบได้</li>
+                <li>หลังโพสต์ TEMBO จะให้ <b>รหัสยืนยัน</b> นำไปใส่ใน “ข้อความยืนยัน” ของฟอร์ม (หน้าที่ขึ้นหลังกดส่ง)</li>
+                <li>ผู้ตอบกรอกรหัสนั้นใน TEMBO เพื่อรับ Coin</li>
+              </ul>
+            </div>
+            <p className="flex items-start gap-2 rounded-xl bg-lavender-soft p-3 text-xs text-muted-foreground"><ShieldCheck className="size-4 shrink-0 text-primary" />TEMBO ไม่เก็บคำตอบของฟอร์มภายนอก คำตอบอยู่กับผู้ให้บริการฟอร์มของคุณ</p>
+          </Card>
+        )}
 
         <Card className="space-y-4 p-6">
           <h3 className="font-display font-semibold">Coin</h3>
@@ -140,5 +174,16 @@ function Row({ k, v, note, bold }: { k: string; v: number; note?: string; bold?:
       <dt>{k}{note && <span className="ml-1.5 rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{note}</span>}</dt>
       <dd>{v.toLocaleString()}</dd>
     </div>
+  );
+}
+
+function ModeButton({ active, onClick, icon, title, text }: { active: boolean; onClick: () => void; icon: React.ReactNode; title: string; text: string }) {
+  return (
+    <button type="button" role="tab" aria-selected={active} onClick={onClick}
+      className={`flex flex-col items-start gap-1 rounded-2xl border-2 bg-card p-4 text-left transition-colors [&_svg]:size-5 ${active ? 'border-primary' : 'border-transparent hover:border-input'}`}>
+      <span className={active ? 'text-primary' : 'text-muted-foreground'}>{icon}</span>
+      <span className="text-sm font-extrabold">{title}</span>
+      <span className="text-xs text-muted-foreground">{text}</span>
+    </button>
   );
 }

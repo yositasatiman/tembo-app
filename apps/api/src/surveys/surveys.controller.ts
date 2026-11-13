@@ -2,7 +2,7 @@ import { Body, Controller, Get, Header, HttpCode, Param, Post, Res, UseGuards } 
 import type { Response } from 'express';
 import {
   CreateSurveyInput, createSurveySchema, ReviewSubsidyInput, reviewSubsidySchema,
-  SponsorSurveyInput, sponsorSurveySchema, SubmitAnswersInput, submitAnswersSchema,
+  SponsorSurveyInput, sponsorSurveySchema, SubmitAnswersInput, submitAnswersSchema, VerifyExternalInput, verifyExternalSchema,
 } from '@tembo/shared';
 import { AuthGuard, AuthUser, CurrentUser, Roles, RolesGuard } from '../common/auth';
 import { ZodPipe } from '../common/zod.pipe';
@@ -48,6 +48,18 @@ export class SurveysController {
   @HttpCode(200)
   respond(@CurrentUser() u: AuthUser, @Param('id') id: string, @Body(new ZodPipe(submitAnswersSchema)) body: SubmitAnswersInput) {
     return this.surveys.recordResponse(u.id, id, body.answers);
+  }
+
+  /** แบบสอบถามลิงก์ภายนอก: บันทึกเวลาเริ่มแล้วคืนลิงก์ */
+  @Post(':id/start')
+  @HttpCode(200)
+  start(@CurrentUser() u: AuthUser, @Param('id') id: string) { return this.surveys.startExternal(u.id, id); }
+
+  /** แบบสอบถามลิงก์ภายนอก: กรอกรหัสยืนยันจากหน้าสุดท้ายของฟอร์ม → รับ Coin */
+  @Post(':id/verify')
+  @HttpCode(200)
+  verify(@CurrentUser() u: AuthUser, @Param('id') id: string, @Body(new ZodPipe(verifyExternalSchema)) body: VerifyExternalInput) {
+    return this.surveys.verifyExternal(u.id, id, body.code);
   }
 
   @Get(':id/results')

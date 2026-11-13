@@ -47,6 +47,13 @@ enum SurveyStatus {
   CLOSED
 }
 
+enum SurveyMode {
+  /// สร้างคำถามใน TEMBO
+  IN_APP
+  /// ใช้ลิงก์แบบสอบถามภายนอก (เช่น Google Form) + รหัสยืนยันการตอบ
+  EXTERNAL
+}
+
 enum SubsidyStatus {
   NONE
   PENDING
@@ -120,6 +127,7 @@ model User {
   events        Event[]
   registrations EventRegistration[]
   eventHides    EventHide[]
+  surveyStarts  SurveyStart[]
 }
 
 model EmailOtp {
@@ -195,6 +203,11 @@ model Survey {
   owner             User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   title             String
   description       String?
+  mode              SurveyMode    @default(IN_APP)
+  /// ลิงก์แบบสอบถามภายนอก (mode = EXTERNAL)
+  externalUrl       String?
+  /// รหัสที่ผู้โพสต์ใส่ไว้ในหน้ายืนยันของฟอร์มภายนอก — ผู้ตอบกรอกรหัสนี้ใน TEMBO เพื่อรับ Coin
+  completionCode    String?
   questionCount     Int
   rewardPerResponse Int
   quota             Int
@@ -219,6 +232,7 @@ model Survey {
   contributions SurveyContribution[]
   responses     SurveyResponse[]
   questions     SurveyQuestion[]
+  starts        SurveyStart[]
 
   @@index([status, createdAt])
   @@index([ownerId])
@@ -256,6 +270,19 @@ model SurveyResponse {
   createdAt DateTime @default(now())
 
   @@unique([surveyId, userId])
+  @@index([userId])
+}
+
+/// ผู้ใช้กดเปิดแบบสอบถามภายนอกเมื่อไร (กันกรอกรหัสทันทีโดยไม่ได้ทำ) และนับครั้งที่กรอกรหัสผิด
+model SurveyStart {
+  surveyId       String
+  survey         Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startedAt      DateTime @default(now())
+  failedAttempts Int      @default(0)
+
+  @@id([surveyId, userId])
   @@index([userId])
 }
 

@@ -5,6 +5,7 @@ import { ArrowLeft, BarChart3, CalendarDays, CheckCircle2, Coins, Eye, HandCoins
 import type { SurveyDetail } from '@tembo/shared';
 import { api, ApiError, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
+import { ExternalOwnerSetup, ExternalRespond } from '@/components/survey/external';
 import { Badge, Button, buttonCls, Card, ErrorText, fmtDate, inputCls, Notice, Progress, Spinner, StatusBadge } from '@/components/ui';
 
 export default function SurveyPage({ params }: { params: Promise<{ id: string }> }) {
@@ -66,7 +67,13 @@ function SurveyView({ id }: { id: string }) {
 
       {msg && <Notice tone="success">{msg}</Notice>}
 
-      {!s.isOwner && s.status !== 'CLOSED' && (
+      {s.isOwner && s.mode === 'EXTERNAL' && s.status !== 'CLOSED' && <ExternalOwnerSetup s={s} />}
+
+      {!s.isOwner && s.status !== 'CLOSED' && s.mode === 'EXTERNAL' && s.canRespond && (
+        <ExternalRespond s={s} onDone={(r) => done(`ยืนยันการตอบแล้ว ได้รับ ${r} Coin`)} />
+      )}
+
+      {!s.isOwner && s.status !== 'CLOSED' && (s.mode === 'IN_APP' || !s.canRespond) && (
         <Card className="space-y-3">
           <h3 className="font-display font-semibold">ตอบแบบสอบถาม</h3>
           {s.hasResponded ? <p className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4" />คุณตอบแล้ว</p>
@@ -104,7 +111,7 @@ function SurveyView({ id }: { id: string }) {
             <p className="text-sm text-muted-foreground">ผู้ตอบ {s.responsesCount} คน · ดาวน์โหลดเป็น CSV ได้</p>
           </div>
           <div className="flex gap-2">
-            <Link href={`/surveys/${s.id}/answer`} className={buttonCls('outline', 'sm')}><Eye />ดูตัวอย่างแบบฟอร์ม</Link>
+            {s.mode === 'IN_APP' && <Link href={`/surveys/${s.id}/answer`} className={buttonCls('outline', 'sm')}><Eye />ดูตัวอย่างแบบฟอร์ม</Link>}
             <Link href={`/surveys/${s.id}/results`} className={buttonCls('primary', 'sm')}><BarChart3 />ดูผลลัพธ์</Link>
           </div>
         </Card>

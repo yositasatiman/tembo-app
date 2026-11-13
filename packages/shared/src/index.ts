@@ -21,6 +21,8 @@ export const INTERESTS = [
 ] as const;
 
 const email = z.string().trim().toLowerCase().email('อีเมลไม่ถูกต้อง').max(254);
+/** ลิงก์ https เท่านั้น */
+export const httpsUrlSchema = z.string().trim().max(500).url('ลิงก์ไม่ถูกต้อง').refine((u) => u.startsWith('https://'), 'ลิงก์ต้องขึ้นต้นด้วย https://');
 const otpCode = z.string().trim().regex(/^\d{6}$/, 'รหัส OTP ต้องเป็นตัวเลข 6 หลัก');
 
 export const requestOtpSchema = z.object({ email });
@@ -215,17 +217,39 @@ export function validateAnswers(questions: Pick<Question, 'id' | 'type' | 'requi
   return { ok: Object.keys(errors).length === 0, errors, clean };
 }
 
+export const SURVEY_MODES = ['IN_APP', 'EXTERNAL'] as const;
+export type SurveyMode = (typeof SURVEY_MODES)[number];
+
+/** แบบสอบถามลิงก์ภายนอก (ขั้นที่ 4.5) */
+export const EXTERNAL_SURVEY_RULES = {
+  /** ต้องเปิดฟอร์มก่อนกี่วินาทีจึงกรอกรหัสยืนยันได้ */
+  MIN_SECONDS: 30,
+  /** กรอกรหัสผิดได้กี่ครั้ง */
+  MAX_ATTEMPTS: 5,
+} as const;
+
 export const createSurveySchema = z.object({
   title: z.string().trim().min(3, 'ชื่ออย่างน้อย 3 ตัวอักษร').max(150),
   description: z.string().trim().max(2000).optional(),
-  questions: z.array(questionInputSchema).min(1, 'ต้องมีอย่างน้อย 1 คำถาม').max(SURVEY_RULES.MAX_QUESTIONS, `ไม่เกิน ${SURVEY_RULES.MAX_QUESTIONS} คำถาม`),
+  mode: z.enum(SURVEY_MODES).default('IN_APP'),
+  questions: z.array(questionInputSchema).max(SURVEY_RULES.MAX_QUESTIONS, `ไม่เกิน ${SURVEY_RULES.MAX_QUESTIONS} คำถาม`).default([]),
+  /** EXTERNAL เท่านั้น */
+  externalUrl: httpsUrlSchema.optional(),
+  /** EXTERNAL เท่านั้น: จำนวนข้อในฟอร์มภายนอก (ใช้คิดรางวัลขั้นต่ำและค่าโพสต์) */
+  externalQuestionCount: z.number().int().min(1).max(SURVEY_RULES.MAX_QUESTIONS, `ไม่เกิน ${SURVEY_RULES.MAX_QUESTIONS} ข้อ`).optional(),
   rewardPerResponse: coin(SURVEY_RULES.MAX_REWARD),
   quota: coin(SURVEY_RULES.MAX_QUOTA),
   closesAt: z.coerce.date(),
   ownerContribution: z.number().int().min(0),
   requestSubsidy: z.boolean().default(false),
 }).superRefine((v, ctx) => {
-  const n = v.questions.length;
+  if (v.mode === 'IN_APP' && v.questions.length < 1) ctx.addIssue({ code: 'custom', path: ['questions'], message: 'ต้องมีอย่างน้อย 1 คำถาม' });
+  if (v.mode === 'EXTERNAL') {
+    if (!v.externalUrl) ctx.addIssue({ code: 'custom', path: ['externalUrl'], message: 'ใส่ลิงก์แบบสอบถาม' });
+    if (!v.externalQuestionCount) ctx.addIssue({ code: 'custom', path: ['externalQuestionCount'], message: 'ระบุจำนวนข้อในแบบสอบถาม' });
+    if (v.questions.length) ctx.addIssue({ code: 'custom', path: ['questions'], message: 'แบบสอบถามลิงก์ภายนอกไม่ต้องสร้างคำถามใน TEMBO' });
+  }
+  const n = surveyQuestionCount(v);
   const band = surveyBand(n);
   if (band && v.rewardPerResponse < band.minReward) {
     ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: `แบบสอบถาม ${n} ข้อ ต้องให้รางวัลอย่างน้อย ${band.minReward} Coin/คน` });
@@ -238,6 +262,16 @@ export const createSurveySchema = z.object({
     ctx.addIssue({ code: 'custom', path: ['closesAt'], message: `เปิดรับได้ไม่เกิน ${SURVEY_RULES.MAX_DURATION_DAYS} วัน` });
   }
 });
+
+/** จำนวนข้อที่ใช้คิดรางวัลขั้นต่ำ/ค่าโพสต์ */
+export function surveyQuestionCount(v: { mode?: SurveyMode; questions: unknown[]; externalQuestionCount?: number }) {
+  return v.mode === 'EXTERNAL' ? v.externalQuestionCount ?? 0 : v.questions.length;
+}
+
+export const verifyExternalSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{4,12}$/, 'รหัสยืนยันไม่ถูกต้อง') });
+export type VerifyExternalInput = z.infer<typeof verifyExternalSchema>;
+export interface ExternalStartResponse { url: string; refCode: string; startedAt: string; canVerifyAt: string; attemptsLeft: number }
+
 export const sponsorSurveySchema = z.object({ amount: coin(100_000) });
 export const reviewSubsidySchema = z.object({ approve: z.boolean(), note: z.string().trim().max(500).optional() });
 
@@ -251,6 +285,7 @@ export type SubsidyStatus = 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
 export interface SurveySummary {
   id: string;
   isMine: boolean;
+  mode: SurveyMode;
   title: string;
   ownerName: string | null;
   ownerFaculty: string | null;
@@ -283,6 +318,12 @@ export interface SurveyDetail extends SurveySummary {
   respondBlockedReason: string | null;
   createdAt: string;
   closedAt: string | null;
+  /** EXTERNAL: ผู้โพสต์เห็นเสมอ / ผู้ตอบเห็นหลังกดเริ่ม */
+  externalUrl: string | null;
+  /** EXTERNAL: เฉพาะผู้โพสต์ */
+  completionCode: string | null;
+  /** EXTERNAL: ผู้ตอบเริ่มแล้วหรือยัง */
+  myStart: ExternalStartResponse | null;
 }
 
 export interface SurveyQuoteResponse { isFirstPost: boolean; subsidy: { eligible: boolean; reason: string | null; remainingSlots: number } }
@@ -336,8 +377,7 @@ export function quoteEvent(i: { rewardPerCheckIn: number; rewardSlots: number })
   return { postFee: EVENT_RULES.POST_FEE, rewardPool, total: EVENT_RULES.POST_FEE + rewardPool };
 }
 
-const httpsUrl = z.string().trim().max(500).url('ลิงก์ไม่ถูกต้อง').refine((u) => u.startsWith('https://'), 'ลิงก์ต้องขึ้นต้นด้วย https://');
-const optionalUrl = z.union([httpsUrl, z.literal('').transform(() => undefined)]).optional();
+const optionalUrl = z.union([httpsUrlSchema, z.literal('').transform(() => undefined)]).optional();
 
 export const createEventSchema = z.object({
   title: z.string().trim().min(3, 'ชื่ออย่างน้อย 3 ตัวอักษร').max(120),

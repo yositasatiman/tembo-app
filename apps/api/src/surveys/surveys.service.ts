@@ -2,17 +2,27 @@ import {
   BadRequestException, ConflictException, ForbiddenException, Injectable, Logger,
   NotFoundException, OnModuleDestroy, OnModuleInit,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Prisma, SYSTEM_WALLETS } from '@tembo/db';
 import {
-  Answers, CreateSurveyInput, Question, QuestionResult, quoteSurvey, SURVEY_RULES, SurveyDetail, SurveyForm,
-  SurveyQuoteResponse, SurveyResults, SurveySummary, validateAnswers,
+  Answers, CreateSurveyInput, EXTERNAL_SURVEY_RULES, ExternalStartResponse, Question, QuestionResult, quoteSurvey,
+  SURVEY_RULES, SurveyDetail, SurveyForm, SurveyQuoteResponse, SurveyResults, SurveySummary, surveyQuestionCount, validateAnswers,
 } from '@tembo/shared';
 import { LedgerService, Tx } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { proRata } from './pro-rata';
 
 const SYSTEM_KEY = 'SYSTEM';
+/** ไม่มี 0/O/1/I เพื่อกันอ่านผิด */
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const randomCode = (len = 6) => [...randomBytes(len)].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+/** รหัสอ้างอิงของผู้ตอบ (คงที่ต่อคนต่อแบบสอบถาม) — ให้ใส่ในฟอร์มภายนอก ผู้โพสต์ใช้เทียบกับ CSV ได้ */
+const refCodeOf = (surveyId: string, userId: string) =>
+  [...createHash('sha256').update(`${surveyId}:${userId}`).digest().subarray(0, 6)].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+const sameCode = (a: string, b: string) => {
+  const x = Buffer.from(a.toUpperCase()); const y = Buffer.from(b.toUpperCase());
+  return x.length === y.length && timingSafeEqual(x, y);
+};
 type Db = Tx | PrismaService;
 
 const surveyInclude = {
@@ -76,7 +86,8 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
         if (!elig.eligible) throw new BadRequestException(elig.reason);
       }
       const isFirstPost = await this.isFirstPost(tx, userId);
-      const questionCount = input.questions.length;
+      const questionCount = surveyQuestionCount(input);
+      const external = input.mode === 'EXTERNAL';
       const q = quoteSurvey({ ...input, questionCount, isFirstPost, withSubsidy: input.requestSubsidy })!;
       if (input.ownerContribution < q.minOwnerContribution) {
         throw new BadRequestException(`ต้องลง Coin อย่างน้อย ${q.minOwnerContribution} (พอจ่ายผู้ตอบ 1 คน)`);
@@ -91,6 +102,9 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
           ownerId: userId,
           title: input.title,
           description: input.description || null,
+          mode: input.mode,
+          externalUrl: external ? input.externalUrl : null,
+          completionCode: external ? randomCode() : null,
           questionCount,
           rewardPerResponse: input.rewardPerResponse,
           quota: input.quota,
@@ -101,7 +115,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
           subsidyAmount: q.subsidyAmount,
           escrowWalletId: escrow.id,
           closesAt: input.closesAt,
-          questions: {
+          questions: external ? undefined : {
             create: input.questions.map((qq, order) => ({
               order, type: qq.type, title: qq.title, required: qq.required,
               options: qq.type === 'SINGLE_CHOICE' || qq.type === 'MULTI_CHOICE' ? qq.options : [],
@@ -215,23 +229,80 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   async recordResponse(userId: string, id: string, answers: Answers) {
     return this.prisma.$transaction(async (tx) => {
       const s = await this.lock(tx, id);
-      const blocked = await this.respondBlockedReason(tx, s, userId);
-      if (blocked) throw blocked.conflict ? new ConflictException(blocked.reason) : new BadRequestException(blocked.reason);
+      if (s.mode === 'EXTERNAL') throw new BadRequestException('แบบสอบถามนี้ใช้ลิงก์ภายนอก ให้กรอกรหัสยืนยันแทน');
+      await this.assertCanRespond(tx, s, userId);
       const questions = await tx.surveyQuestion.findMany({ where: { surveyId: id }, orderBy: { order: 'asc' } });
       const check = validateAnswers(questions, answers);
       if (!check.ok) throw new BadRequestException({ message: 'กรุณาตอบให้ครบและถูกต้อง', errors: check.errors });
-
-      const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
-      await this.ledger.post(tx, {
-        type: 'SURVEY_REWARD', idempotencyKey: `survey:${id}:resp:${userId}`, memo: `รางวัลตอบแบบสอบถาม "${s.title}"`,
-        entries: [{ walletId: s.escrowWalletId, delta: -s.rewardPerResponse }, { walletId: wallet.id, delta: s.rewardPerResponse }],
-      });
-      await tx.surveyResponse.create({ data: { surveyId: id, userId, reward: s.rewardPerResponse, answers: check.clean } });
-      const updated = await tx.survey.update({ where: { id }, data: { responsesCount: { increment: 1 } } });
-      if (updated.responsesCount >= updated.quota) await this.closeLocked(tx, id);
-      const after = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id }, select: { balance: true } });
-      return { reward: s.rewardPerResponse, balance: after.balance };
+      return this.pay(tx, s, userId, check.clean);
     });
+  }
+
+  private async assertCanRespond(db: Db, s: Parameters<SurveysService['respondBlockedReason']>[1], userId: string) {
+    const blocked = await this.respondBlockedReason(db, s, userId);
+    if (blocked) throw blocked.conflict ? new ConflictException(blocked.reason) : new BadRequestException(blocked.reason);
+  }
+
+  /** จ่ายรางวัล + บันทึกคำตอบ (ต้องล็อกแถว Survey และตรวจสิทธิ์แล้ว) */
+  private async pay(tx: Tx, s: { id: string; title: string; escrowWalletId: string; rewardPerResponse: number }, userId: string, answers: Answers) {
+    const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
+    await this.ledger.post(tx, {
+      type: 'SURVEY_REWARD', idempotencyKey: `survey:${s.id}:resp:${userId}`, memo: `รางวัลตอบแบบสอบถาม "${s.title}"`,
+      entries: [{ walletId: s.escrowWalletId, delta: -s.rewardPerResponse }, { walletId: wallet.id, delta: s.rewardPerResponse }],
+    });
+    await tx.surveyResponse.create({ data: { surveyId: s.id, userId, reward: s.rewardPerResponse, answers } });
+    const updated = await tx.survey.update({ where: { id: s.id }, data: { responsesCount: { increment: 1 } } });
+    if (updated.responsesCount >= updated.quota) await this.closeLocked(tx, s.id);
+    const after = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id }, select: { balance: true } });
+    return { reward: s.rewardPerResponse, balance: after.balance };
+  }
+
+  // ───────────── แบบสอบถามลิงก์ภายนอก ─────────────
+
+  private startInfo(s: { id: string; externalUrl: string | null }, userId: string, start: { startedAt: Date; failedAttempts: number }): ExternalStartResponse {
+    return {
+      url: s.externalUrl!,
+      refCode: refCodeOf(s.id, userId),
+      startedAt: start.startedAt.toISOString(),
+      canVerifyAt: new Date(start.startedAt.getTime() + EXTERNAL_SURVEY_RULES.MIN_SECONDS * 1000).toISOString(),
+      attemptsLeft: Math.max(0, EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS - start.failedAttempts),
+    };
+  }
+
+  /** ผู้ตอบกด "เปิดแบบสอบถาม" — บันทึกเวลาเริ่ม (ครั้งแรกเท่านั้น) แล้วคืนลิงก์ */
+  async startExternal(userId: string, id: string): Promise<ExternalStartResponse> {
+    const s = await this.prisma.survey.findUnique({ where: { id }, include: { ...surveyInclude, contributions: true } });
+    if (!s) throw new NotFoundException('ไม่พบแบบสอบถาม');
+    if (s.mode !== 'EXTERNAL') throw new BadRequestException('แบบสอบถามนี้ตอบใน TEMBO');
+    await this.assertCanRespond(this.prisma, s, userId);
+    const start = await this.prisma.surveyStart.upsert({
+      where: { surveyId_userId: { surveyId: id, userId } }, create: { surveyId: id, userId }, update: {},
+    });
+    return this.startInfo(s, userId, start);
+  }
+
+  /** ผู้ตอบกรอกรหัสจากหน้ายืนยันของฟอร์มภายนอก → จ่ายรางวัล */
+  async verifyExternal(userId: string, id: string, code: string) {
+    // นับครั้งที่ผิดนอกธุรกรรมจ่ายเงิน เพื่อไม่ให้ถูก rollback ไปพร้อม error
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const s = await this.lock(tx, id);
+      if (s.mode !== 'EXTERNAL') throw new BadRequestException('แบบสอบถามนี้ตอบใน TEMBO');
+      await this.assertCanRespond(tx, s, userId);
+      const start = await tx.surveyStart.findUnique({ where: { surveyId_userId: { surveyId: id, userId } } });
+      if (!start) throw new BadRequestException('กด "เปิดแบบสอบถาม" ก่อน แล้วค่อยกรอกรหัสยืนยัน');
+      if (start.failedAttempts >= EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS) throw new ForbiddenException(`กรอกรหัสผิดครบ ${EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS} ครั้งแล้ว ติดต่อผู้โพสต์`);
+      const wait = start.startedAt.getTime() + EXTERNAL_SURVEY_RULES.MIN_SECONDS * 1000 - Date.now();
+      if (wait > 0) throw new BadRequestException(`ทำแบบสอบถามให้เสร็จก่อน (รออีก ${Math.ceil(wait / 1000)} วินาที)`);
+      if (!s.completionCode || !sameCode(s.completionCode, code)) return { wrong: true as const, left: EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS - start.failedAttempts - 1 };
+      return { wrong: false as const, paid: await this.pay(tx, s, userId, {}) };
+    });
+    if (outcome.wrong) {
+      await this.prisma.surveyStart.update({ where: { surveyId_userId: { surveyId: id, userId } }, data: { failedAttempts: { increment: 1 } } });
+      throw new BadRequestException(outcome.left > 0
+        ? `รหัสยืนยันไม่ถูกต้อง ตรวจว่าส่งฟอร์มเรียบร้อยแล้ว (เหลืออีก ${outcome.left} ครั้ง)`
+        : 'รหัสยืนยันไม่ถูกต้อง และกรอกผิดครบจำนวนครั้งแล้ว');
+    }
+    return outcome.paid;
   }
 
   private async respondBlockedReason(db: Db, s: SurveyRow & { contributions: { key: string }[] }, userId: string): Promise<{ reason: string; conflict?: boolean } | null> {
@@ -240,7 +311,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
     if (s.status === 'PENDING_REVIEW') return { reason: 'แบบสอบถามนี้ยังรอแอดมินตรวจ' };
     if (s.status === 'CLOSED' || s.closesAt <= new Date() || s.responsesCount >= s.quota) return { reason: 'แบบสอบถามนี้ปิดรับแล้ว' };
     if (s.contributions.some((c) => c.key === userId)) return { reason: 'ผู้ที่สนับสนุนแบบสอบถามนี้ตอบไม่ได้' };
-    if (!(await db.surveyQuestion.count({ where: { surveyId: s.id } }))) return { reason: 'แบบสอบถามนี้ยังไม่มีคำถาม (สร้างก่อนมีระบบคำถาม)' };
+    if (s.mode === 'IN_APP' && !(await db.surveyQuestion.count({ where: { surveyId: s.id } }))) return { reason: 'แบบสอบถามนี้ยังไม่มีคำถาม (สร้างก่อนมีระบบคำถาม)' };
     const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { cmuVerifiedAt: true } });
     if (!user.cmuVerifiedAt) return { reason: 'ต้องยืนยันอีเมล @cmu.ac.th ก่อนจึงจะรับ Coin ได้' };
     if (s.escrowWallet.balance < s.rewardPerResponse) return { reason: 'Coin รางวัลของแบบสอบถามนี้หมดแล้ว รอผู้โพสต์หรือเพื่อนเติม' };
@@ -312,7 +383,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   private summary(s: SurveyRow, viewerId: string): SurveySummary {
     const left = Math.max(0, s.quota - s.responsesCount);
     return {
-      id: s.id, isMine: s.ownerId === viewerId, title: s.title, ownerName: s.owner.displayName, ownerFaculty: s.owner.faculty, questionCount: s.questionCount,
+      id: s.id, isMine: s.ownerId === viewerId, mode: s.mode, title: s.title, ownerName: s.owner.displayName, ownerFaculty: s.owner.faculty, questionCount: s.questionCount,
       rewardPerResponse: s.rewardPerResponse, quota: s.quota, responsesCount: s.responsesCount,
       status: s.status, closesAt: s.closesAt.toISOString(),
       payableResponses: s.status === 'CLOSED' ? 0 : Math.min(left, Math.floor(s.escrowWallet.balance / s.rewardPerResponse)),
@@ -340,8 +411,15 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
     const mine = s.contributions.find((c) => c.key === viewerId);
     const hasResponded = !!(await this.prisma.surveyResponse.findUnique({ where: { surveyId_userId: { surveyId: id, userId: viewerId } } }));
     const blocked = await this.respondBlockedReason(this.prisma, s, viewerId);
+    const isOwner = s.ownerId === viewerId;
+    const start = s.mode === 'EXTERNAL' && !isOwner
+      ? await this.prisma.surveyStart.findUnique({ where: { surveyId_userId: { surveyId: id, userId: viewerId } } })
+      : null;
     return {
       ...this.summary(s, viewerId),
+      externalUrl: isOwner || start ? s.externalUrl : null,
+      completionCode: isOwner ? s.completionCode : null,
+      myStart: start ? this.startInfo(s, viewerId, start) : null,
       description: s.description,
       targetPool: s.targetPool,
       postFee: s.postFee,
@@ -371,6 +449,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   async form(id: string, viewerId: string): Promise<SurveyForm> {
     const s = await this.prisma.survey.findUnique({ where: { id }, include: { ...surveyInclude, contributions: true, questions: { orderBy: { order: 'asc' } } } });
     if (!s) throw new NotFoundException('ไม่พบแบบสอบถาม');
+    if (s.mode === 'EXTERNAL') throw new BadRequestException('แบบสอบถามนี้ใช้ลิงก์ภายนอก');
     if (s.ownerId !== viewerId) {
       const blocked = await this.respondBlockedReason(this.prisma, s, viewerId);
       if (blocked) throw blocked.conflict ? new ConflictException(blocked.reason) : new ForbiddenException(blocked.reason);
@@ -427,11 +506,12 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       const str = v === null || v === undefined ? '' : String(v);
       return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
     };
-    const header = ['ลำดับ', 'เวลาที่ตอบ', 'คณะ', 'ชั้นปี', ...s.questions.map((q, i) => `Q${i + 1}. ${q.title}`)];
+    const ext = s.mode === 'EXTERNAL';
+    const header = ['ลำดับ', 'เวลาที่ตอบ', 'คณะ', 'ชั้นปี', ...(ext ? ['รหัสอ้างอิง'] : []), ...s.questions.map((q, i) => `Q${i + 1}. ${q.title}`)];
     const rows = s.responses.map((r, i) => {
       const a = (r.answers ?? {}) as Answers;
       return [
-        i + 1, r.createdAt.toISOString(), r.user.faculty ?? '', r.user.studyYear ?? '',
+        i + 1, r.createdAt.toISOString(), r.user.faculty ?? '', r.user.studyYear ?? '', ...(ext ? [refCodeOf(s.id, r.userId)] : []),
         ...s.questions.map((q) => {
           const v = a[q.id];
           if (v === undefined) return '';

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CalendarDays, Coins, ListChecks, Sparkles, Users } from 'lucide-react';
+import { CalendarDays, Coins, Link2, ListChecks, Sparkles, Users } from 'lucide-react';
 import type { SurveySummary } from '@tembo/shared';
 import { Badge, buttonCls, fmtDay, Progress, StatusBadge } from '../ui';
 
@@ -13,6 +13,7 @@ export function SurveyCard({ s, myFaculty, mine: mineTab }: { s: SurveySummary; 
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap gap-1.5">
             {mine ? <><StatusBadge status={s.status} /><Badge tone="outline">ของคุณ</Badge></> : sameFaculty && <Badge><Sparkles />คณะเดียวกับคุณ</Badge>}
+            {s.mode === 'EXTERNAL' && <Badge tone="muted"><Link2 />ฟอร์มภายนอก</Badge>}
           </div>
           <h3 className="font-display text-base leading-snug font-semibold">
             <Link href={`/surveys/${s.id}`} className="hover:text-primary">{s.title}</Link>

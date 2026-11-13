@@ -34,7 +34,7 @@ export async function createTestApp() {
 
 export async function resetDb(prisma: PrismaService) {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "EventHide","EventRegistration","Event","SurveyResponse","SurveyContribution","Survey","LedgerEntry","LedgerTx","Session","EmailOtp","Wallet","User" RESTART IDENTITY CASCADE',
+    'TRUNCATE "SurveyStart","EventHide","EventRegistration","Event","SurveyResponse","SurveyContribution","Survey","LedgerEntry","LedgerTx","Session","EmailOtp","Wallet","User" RESTART IDENTITY CASCADE',
   );
   await prisma.wallet.create({ data: { id: SYSTEM_WALLETS.MINT, kind: 'SYSTEM_MINT' } });
   await prisma.wallet.create({ data: { id: SYSTEM_WALLETS.BURN, kind: 'SYSTEM_BURN' } });

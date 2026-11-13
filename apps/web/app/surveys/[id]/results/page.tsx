@@ -36,6 +36,9 @@ function Results({ id }: { id: string }) {
         </Card>
       )}
 
+      {r.questions.length === 0 && (
+        <Card className="text-sm text-muted-foreground">แบบสอบถามนี้ใช้ฟอร์มภายนอก คำตอบอยู่ในฟอร์มของคุณ · ไฟล์ CSV มีรหัสอ้างอิงของผู้ตอบแต่ละคนไว้เทียบกับฟอร์ม</Card>
+      )}
       {r.questions.map((q, i) => <QuestionCard key={q.question.id} n={i + 1} q={q} total={r.responses} />)}
     </div>
   );
