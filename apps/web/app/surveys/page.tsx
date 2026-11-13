@@ -2,12 +2,14 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, CalendarDays, Plus, Sparkles } from 'lucide-react';
+import { ArrowRight, Plus, Sparkles } from 'lucide-react';
 import type { SurveySummary } from '@tembo/shared';
 import { api } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
 import { SurveyCard } from '@/components/survey/card';
 import { buttonCls, Card, SectionHeader, Spinner } from '@/components/ui';
+import { EventCard } from '@/components/event/card';
+import type { EventSummary } from '@tembo/shared';
 
 export default function SurveysPage() {
   return <AppShell><Suspense fallback={<Spinner />}><Feed /></Suspense></AppShell>;
@@ -74,18 +76,21 @@ function Feed() {
           ) : list.map((s) => <SurveyCard key={s.id} s={s} myFaculty={me.faculty} mine={tab === 'mine'} />)}
       </section>
 
-      {tab === 'open' && !q && (
-        <section className="space-y-4">
-          <SectionHeader title="Event ในมหาวิทยาลัย" subtitle="งานคณะ กิจกรรมชมรม และเวิร์กช็อปรอบ มช." />
-          <Card className="flex items-center gap-4">
-            <span className="flex size-12 items-center justify-center rounded-2xl bg-accent text-accent-foreground"><CalendarDays className="size-6" /></span>
-            <div>
-              <p className="font-display font-semibold">เร็ว ๆ นี้</p>
-              <p className="text-sm text-muted-foreground">ระบบ Event และเช็กอินด้วย QR จะมาในขั้นที่ 4</p>
-            </div>
-          </Card>
-        </section>
-      )}
+      {tab === 'open' && !q && <UpcomingEvents />}
     </>
+  );
+}
+
+/** Event ที่กำลังจะมาถึง 3 งานแรก */
+function UpcomingEvents() {
+  const [rows, setRows] = useState<EventSummary[] | null>(null);
+  useEffect(() => { api<EventSummary[]>('/events').then((r) => setRows(r.slice(0, 3))).catch(() => setRows([])); }, []);
+  if (rows !== null && rows.length === 0) return null;
+  return (
+    <section className="space-y-4">
+      <SectionHeader title="Event ในมหาวิทยาลัย" subtitle="งานคณะ กิจกรรมชมรม และเวิร์กช็อปรอบ มช."
+        action={<Link href="/events" className={buttonCls('outline', 'sm')}>ดูทั้งหมด<ArrowRight /></Link>} />
+      {rows === null ? <Spinner /> : <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{rows.map((e) => <EventCard key={e.id} e={e} />)}</div>}
+    </section>
   );
 }

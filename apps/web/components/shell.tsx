@@ -3,7 +3,7 @@ import { createContext, FormEvent, ReactNode, Suspense, useCallback, useContext,
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  BadgeCheck, ClipboardList, Coins, LayoutGrid, LogOut, PenSquare, Search, ShieldCheck, Sparkles, Ticket,
+  BadgeCheck, CalendarPlus, ClipboardList, Coins, LayoutGrid, LogOut, PenSquare, Search, ShieldCheck, Sparkles, Ticket,
 } from 'lucide-react';
 import type { MeResponse } from '@tembo/shared';
 import { getMe, post } from '@/lib/api';
@@ -21,7 +21,8 @@ const NAV = [
   { href: '/surveys', label: 'ฟีดทั้งหมด', icon: LayoutGrid, match: (p: string, tab: string | null) => p === '/surveys' && tab !== 'mine' },
   { href: '/surveys?tab=mine', label: 'แบบสอบถามของฉัน', icon: ClipboardList, match: (p: string, tab: string | null) => p === '/surveys' && tab === 'mine' },
   { href: '/surveys/new', label: 'โพสต์แบบสอบถาม', icon: PenSquare, match: (p: string) => p === '/surveys/new' },
-  { href: '/events', label: 'Event ในมหาวิทยาลัย', icon: Ticket, match: (p: string) => p.startsWith('/events'), soon: true },
+  { href: '/events', label: 'Event ในมหาวิทยาลัย', icon: Ticket, match: (p: string) => p === '/events' || (p.startsWith('/events/') && p !== '/events/new') },
+  { href: '/events/new', label: 'สร้าง Event', icon: CalendarPlus, match: (p: string) => p === '/events/new' },
 ];
 
 /** โครงหน้าหลัก: แถบบน + แถบซ้าย (เมนู, การ์ดโปรไฟล์, กิจกรรมของฉัน) ตามดีไซน์ */
@@ -96,7 +97,7 @@ function Header({ me }: { me: MeResponse }) {
 function NavItems({ compact = false }: { compact?: boolean }) {
   const path = usePathname();
   const tab = useSearchParams().get('tab');
-  return NAV.map(({ href, label, icon: Icon, match, soon }) => {
+  return NAV.map(({ href, label, icon: Icon, match }) => {
     const active = match(path, tab);
     if (compact) {
       return (
@@ -108,7 +109,6 @@ function NavItems({ compact = false }: { compact?: boolean }) {
       <Link key={href} href={href} className={cx('flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
         active ? 'bg-primary text-primary-foreground shadow-card' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')}>
         <Icon className="size-4" />{label}
-        {soon && <span className={cx('ml-auto text-[10px]', active ? 'opacity-80' : 'text-muted-foreground')}>เร็ว ๆ นี้</span>}
       </Link>
     );
   });

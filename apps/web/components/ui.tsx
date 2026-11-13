@@ -1,5 +1,5 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
-import { Target } from 'lucide-react';
+import { useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react';
+import { Target, X } from 'lucide-react';
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 
@@ -120,3 +120,57 @@ export function Spinner({ label = 'กำลังโหลด…' }: { label?: 
 export const fmtDate = (iso: string) => new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
 export const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
 export const yearLabel = (y: number | null) => (y === 7 ? 'บัณฑิตศึกษา' : y ? `ปี ${y}` : '');
+
+/** ชิปตัวกรองแบบเม็ดยา (Figma: Filter chip) */
+export function Chip({ active, children, onClick, onCard }: { active?: boolean; children: ReactNode; onClick?: () => void; /** วางบนพื้นขาว → ใช้พื้นม่วงอ่อน */ onCard?: boolean }) {
+  return (
+    <button type="button" role="tab" aria-selected={!!active} onClick={onClick}
+      className={cx('shrink-0 rounded-full px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors',
+        active ? 'bg-primary text-white' : onCard ? 'bg-lavender-soft text-muted-foreground hover:text-foreground' : 'bg-card text-muted-foreground hover:text-foreground')}>
+      {children}
+    </button>
+  );
+}
+
+/** หน้าว่าง (Figma: STATES / Empty) */
+export function EmptyState({ icon, title, text, action }: { icon: ReactNode; title: string; text?: string; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-2xl bg-card px-6 py-10 text-center shadow-card">
+      <span className="mb-1 flex size-14 items-center justify-center rounded-2xl bg-lavender text-primary [&_svg]:size-7">{icon}</span>
+      <p className="font-extrabold">{title}</p>
+      {text && <p className="max-w-xs text-sm text-muted-foreground">{text}</p>}
+      {action && <div className="mt-2">{action}</div>}
+    </div>
+  );
+}
+
+/** แถบแจ้งเตือนสั้น ๆ ด้านล่าง หายเองใน 5 วินาที */
+export function Toast({ children, onClose, action }: { children: ReactNode; onClose: () => void; action?: { label: string; onClick: () => void } }) {
+  useEffect(() => { const t = setTimeout(onClose, 5000); return () => clearTimeout(t); }, [onClose, children]);
+  return (
+    <div role="status" className="fixed inset-x-4 bottom-6 z-50 mx-auto flex max-w-sm items-center gap-3 rounded-2xl bg-indigo px-4 py-3 text-sm text-white shadow-float">
+      <span className="flex-1">{children}</span>
+      {action && <button type="button" onClick={action.onClick} className="font-bold text-coin">{action.label}</button>}
+      <button type="button" aria-label="ปิด" onClick={onClose} className="opacity-70 hover:opacity-100"><X className="size-4" /></button>
+    </div>
+  );
+}
+
+/** แถบสถานะด้านบน (Figma: "You're registered" / "Registration Full") */
+export function Banner({ tone, icon, title, children }: { tone: 'success' | 'danger' | 'warning' | 'info'; icon: ReactNode; title: string; children?: ReactNode }) {
+  const cls = {
+    success: ['bg-success-soft', 'text-success', 'border-success/30'],
+    danger: ['bg-destructive-soft', 'text-destructive', 'border-destructive/30'],
+    warning: ['bg-coin-soft', 'text-warning-foreground', 'border-warning/30'],
+    info: ['bg-lavender-soft', 'text-primary', 'border-primary/20'],
+  }[tone];
+  return (
+    <div role="status" className={cx('flex items-start gap-3 rounded-2xl p-3', cls[0])}>
+      <span className={cx('flex size-9 shrink-0 items-center justify-center rounded-xl border bg-card [&_svg]:size-[18px]', cls[1], cls[2])}>{icon}</span>
+      <div className="min-w-0 text-xs leading-relaxed text-indigo">
+        <p className={cx('text-sm font-extrabold', cls[1])}>{title}</p>
+        {children}
+      </div>
+    </div>
+  );
+}

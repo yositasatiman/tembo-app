@@ -1,34 +1,47 @@
 @import "tailwindcss";
 
-/* โทนสีและสไตล์ตามดีไซน์ (Lovable: CMU Connect Hub) */
+/* โทนสีและสไตล์ตาม Figma "TEMBO — 01 Design System" */
 @theme {
-  --color-background: oklch(98.5% 0 0);
-  --color-foreground: oklch(27.9% .041 260.031);
-  --color-card: oklch(100% 0 0);
-  --color-primary: oklch(41.6% .176 306.5);
-  --color-primary-deep: oklch(31% .135 306);
-  --color-primary-soft: oklch(94.5% .035 310);
-  --color-primary-foreground: oklch(99% .005 300);
-  --color-accent: oklch(94.5% .035 310);
-  --color-accent-foreground: oklch(31% .135 306);
-  --color-secondary: oklch(96.5% .008 300);
-  --color-muted: oklch(96.5% .005 300);
-  --color-muted-foreground: oklch(52% .02 285);
-  --color-border: oklch(92.5% .012 300);
-  --color-input: oklch(91.5% .012 300);
-  --color-success: oklch(62% .14 155);
-  --color-success-soft: oklch(95% .04 155);
-  --color-warning: oklch(76% .15 70);
-  --color-warning-soft: oklch(96% .05 80);
-  --color-warning-foreground: oklch(40% .09 60);
-  --color-destructive: oklch(57.7% .245 27.325);
-  --color-sky: oklch(68% .13 235);
+  /* Brand palette */
+  --color-indigo: #20105c;          /* Deep indigo — หัวข้อ, สถานะที่เลือก */
+  --color-purple: #6c3ce9;          /* TEMBO purple — ปุ่มหลัก, ลิงก์ */
+  --color-lavender: #e9e1ff;        /* Light lavender — avatar, จุดเน้นอ่อน */
+  --color-lavender-soft: #f7f4ff;   /* พื้นชิป/ไอคอน */
+  --color-canvas: #f3f0ff;          /* App background */
+  --color-coin: #ffd84d;            /* Coin yellow */
+  --color-coin-soft: #fff6c9;
 
-  --font-sans: "Inter", "Prompt", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Prompt", "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Semantic tokens (ชื่อเดิมที่ทั้งแอปใช้อยู่) */
+  --color-background: var(--color-canvas);
+  --color-foreground: var(--color-indigo);
+  --color-card: #ffffff;
+  --color-primary: var(--color-purple);
+  --color-primary-deep: var(--color-indigo);
+  --color-primary-soft: var(--color-lavender-soft);
+  --color-primary-foreground: #ffffff;
+  --color-accent: var(--color-lavender-soft);
+  --color-accent-foreground: var(--color-purple);
+  --color-secondary: var(--color-lavender-soft);
+  --color-muted: #f4f2f8;
+  --color-muted-foreground: #716b82;
+  --color-border: #e8e3f2;
+  --color-input: #ddd4f7;
+  --color-success: #268c63;
+  --color-success-soft: #e4f7ef;
+  --color-warning: #b7791f;
+  --color-warning-soft: var(--color-coin-soft);
+  --color-warning-foreground: #6b4e00;
+  --color-destructive: #d64545;
+  --color-destructive-soft: #fdecec;
+  --color-sky: #3b82c4;
 
-  --shadow-card: 0 1px 2px oklch(35% .16 305 / .06), 0 8px 24px -12px oklch(35% .16 305 / .14);
-  --shadow-float: 0 24px 60px -24px oklch(35% .16 305 / .3);
+  --font-sans: "Inter", "Noto Sans Thai", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", "Noto Sans Thai", ui-sans-serif, system-ui, sans-serif;
+
+  /* Radii: 8 small control · 12 input/button · 16 card · 24 feature */
+  --radius-card: 16px;
+  --shadow-card: 0 8px 24px 0 rgb(43 23 96 / 0.07);
+  --shadow-float: 0 14px 32px 0 rgb(43 23 96 / 0.14);
 }
 
 @layer base {
@@ -37,5 +50,5 @@
 }
 
 @layer components {
-  .tembo-card { @apply rounded-3xl border border-border bg-card shadow-card; }
+  .tembo-card { @apply rounded-2xl bg-card shadow-card; }
 }

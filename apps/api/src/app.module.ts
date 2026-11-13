@@ -7,6 +7,8 @@ import { AuthService } from './auth/auth.service';
 import { OtpService } from './auth/otp.service';
 import { AuthGuard, RolesGuard } from './common/auth';
 import { config } from './config';
+import { AdminEventsController, EventsController } from './events/events.controller';
+import { EventsService } from './events/events.service';
 import { LedgerService } from './ledger/ledger.service';
 import { MailService } from './mail/mail.service';
 import { PrismaModule } from './prisma/prisma.service';
@@ -26,10 +28,10 @@ class HealthController {
     JwtModule.registerAsync({ global: true, useFactory: () => ({ secret: config.jwtSecret }) }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, SurveysController, AdminController],
+  controllers: [HealthController, AuthController, UsersController, SurveysController, AdminController, EventsController, AdminEventsController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    AuthGuard, RolesGuard, AuthService, OtpService, UsersService, LedgerService, MailService, SurveysService,
+    AuthGuard, RolesGuard, AuthService, OtpService, UsersService, LedgerService, MailService, SurveysService, EventsService,
   ],
 })
 export class AppModule {}

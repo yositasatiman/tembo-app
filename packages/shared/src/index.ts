@@ -307,3 +307,123 @@ export interface SurveyResults {
   questions: QuestionResult[];
   byFaculty: { faculty: string; count: number }[];
 }
+
+// ───────────────────────── Event (ขั้นที่ 4) ─────────────────────────
+
+export const EVENT_CATEGORIES = ['UNIVERSITY', 'FACULTY', 'CLUB'] as const;
+export type EventCategory = (typeof EVENT_CATEGORIES)[number];
+export const EVENT_CATEGORY_LABEL: Record<EventCategory, string> = { UNIVERSITY: 'มหาวิทยาลัย', FACULTY: 'คณะ', CLUB: 'ชมรม' };
+
+export const EVENT_RULES = {
+  /** ค่าโพสต์ Event (ไม่มีสิทธิ์โพสต์แรกฟรี) — คืนให้ถ้าแอดมินไม่อนุมัติหรือยกเลิกก่อนอนุมัติ */
+  POST_FEE: 10,
+  MAX_REWARD: 100,
+  MAX_REWARD_SLOTS: 1000,
+  MAX_CAPACITY: 5000,
+  MAX_TAGS: 5,
+  MAX_DURATION_HOURS: 72,
+  MAX_DAYS_AHEAD: 180,
+  /** เช็กอินได้ตั้งแต่ก่อนเริ่มงาน … นาที ถึงหลังจบงาน … นาที */
+  CHECKIN_OPENS_BEFORE_MIN: 60,
+  CHECKIN_CLOSES_AFTER_MIN: 120,
+  /** รหัสเช็กอินเปลี่ยนทุก … วินาที (รับรหัสปัจจุบันและรหัสก่อนหน้า 1 รอบ) */
+  CHECKIN_CODE_SECONDS: 60,
+} as const;
+
+/** Coin ที่ต้องล็อกตอนสร้าง Event = ค่าโพสต์ + รางวัล × จำนวนคนที่ได้รางวัล */
+export function quoteEvent(i: { rewardPerCheckIn: number; rewardSlots: number }) {
+  const rewardPool = i.rewardPerCheckIn > 0 ? i.rewardPerCheckIn * i.rewardSlots : 0;
+  return { postFee: EVENT_RULES.POST_FEE, rewardPool, total: EVENT_RULES.POST_FEE + rewardPool };
+}
+
+const httpsUrl = z.string().trim().max(500).url('ลิงก์ไม่ถูกต้อง').refine((u) => u.startsWith('https://'), 'ลิงก์ต้องขึ้นต้นด้วย https://');
+const optionalUrl = z.union([httpsUrl, z.literal('').transform(() => undefined)]).optional();
+
+export const createEventSchema = z.object({
+  title: z.string().trim().min(3, 'ชื่ออย่างน้อย 3 ตัวอักษร').max(120),
+  description: z.string().trim().min(10, 'รายละเอียดอย่างน้อย 10 ตัวอักษร').max(3000),
+  hostName: z.string().trim().min(2, 'กรอกชื่อผู้จัด').max(80),
+  category: z.enum(EVENT_CATEGORIES),
+  tags: z.array(z.enum(INTERESTS)).max(EVENT_RULES.MAX_TAGS, `เลือกได้ไม่เกิน ${EVENT_RULES.MAX_TAGS} แท็ก`).default([]),
+  coverUrl: optionalUrl,
+  location: z.string().trim().min(2, 'กรอกสถานที่').max(200),
+  startsAt: z.coerce.date(),
+  endsAt: z.coerce.date(),
+  capacity: z.number().int().min(1).max(EVENT_RULES.MAX_CAPACITY).nullable().default(null),
+  registrationUrl: optionalUrl,
+  rewardPerCheckIn: z.number().int().min(0).max(EVENT_RULES.MAX_REWARD).default(0),
+  rewardSlots: z.number().int().min(0).max(EVENT_RULES.MAX_REWARD_SLOTS).default(0),
+}).superRefine((v, ctx) => {
+  const now = Date.now();
+  if (v.startsAt.getTime() < now + 60 * 60_000) ctx.addIssue({ code: 'custom', path: ['startsAt'], message: 'เวลาเริ่มต้องอยู่ในอนาคตอย่างน้อย 1 ชั่วโมง' });
+  if (v.startsAt.getTime() > now + EVENT_RULES.MAX_DAYS_AHEAD * 86_400_000) ctx.addIssue({ code: 'custom', path: ['startsAt'], message: `โพสต์ล่วงหน้าได้ไม่เกิน ${EVENT_RULES.MAX_DAYS_AHEAD} วัน` });
+  if (v.endsAt <= v.startsAt) ctx.addIssue({ code: 'custom', path: ['endsAt'], message: 'เวลาจบต้องหลังเวลาเริ่ม' });
+  else if (v.endsAt.getTime() - v.startsAt.getTime() > EVENT_RULES.MAX_DURATION_HOURS * 3_600_000) ctx.addIssue({ code: 'custom', path: ['endsAt'], message: `งานยาวได้ไม่เกิน ${EVENT_RULES.MAX_DURATION_HOURS} ชั่วโมง` });
+  if (v.rewardPerCheckIn > 0) {
+    if (v.rewardSlots < 1) ctx.addIssue({ code: 'custom', path: ['rewardSlots'], message: 'ระบุจำนวนคนที่ได้รางวัล' });
+    if (v.capacity !== null && v.rewardSlots > v.capacity) ctx.addIssue({ code: 'custom', path: ['rewardSlots'], message: 'จำนวนคนที่ได้รางวัลต้องไม่เกินจำนวนที่รับ' });
+  } else if (v.rewardSlots > 0) ctx.addIssue({ code: 'custom', path: ['rewardPerCheckIn'], message: 'ระบุ Coin ต่อคน หรือตั้งจำนวนคนที่ได้รางวัลเป็น 0' });
+});
+export type CreateEventInput = z.infer<typeof createEventSchema>;
+
+export const checkInSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{6}$/, 'รหัสเช็กอินไม่ถูกต้อง') });
+export type CheckInInput = z.infer<typeof checkInSchema>;
+export const reviewEventSchema = z.object({ approve: z.boolean(), note: z.string().trim().max(500).optional() });
+export type ReviewEventInput = z.infer<typeof reviewEventSchema>;
+
+export type EventStatus = 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED' | 'CANCELLED' | 'ENDED';
+export type RegistrationStatus = 'REGISTERED' | 'WAITLISTED' | 'CANCELLED';
+export const EVENT_FILTERS = ['all', 'UNIVERSITY', 'FACULTY', 'CLUB', 'mine'] as const;
+export type EventFilter = (typeof EVENT_FILTERS)[number];
+
+export interface EventSummary {
+  id: string;
+  title: string;
+  hostName: string;
+  category: EventCategory;
+  tags: string[];
+  coverUrl: string | null;
+  location: string;
+  startsAt: string;
+  endsAt: string;
+  capacity: number | null;
+  registeredCount: number;
+  isFull: boolean;
+  rewardPerCheckIn: number;
+  /** รางวัลเหลืออีกกี่คน */
+  rewardsLeft: number;
+  status: EventStatus;
+  isOrganizer: boolean;
+  myStatus: RegistrationStatus | null;
+  myCheckedIn: boolean;
+}
+
+export interface EventDetail extends EventSummary {
+  description: string;
+  registrationUrl: string | null;
+  organizerVerified: boolean;
+  checkedInCount: number;
+  waitlistCount: number;
+  /** อักษรย่อชื่อผู้ลงทะเบียนล่าสุด (ไม่เกิน 3 คน) */
+  participantInitials: string[];
+  /** อยู่ในคิวลำดับที่เท่าไร (เฉพาะ WAITLISTED) */
+  myWaitlistPosition: number | null;
+  myReward: number;
+  hidden: boolean;
+  checkInOpen: boolean;
+  checkInOpensAt: string;
+  checkInClosesAt: string;
+  /** เหตุผลที่ลงทะเบียนไม่ได้ (null = ลงได้) */
+  registerBlockedReason: string | null;
+  // เฉพาะผู้จัด
+  postFee: number;
+  escrowBalance: number | null;
+  rewardSlots: number;
+  rewardedCount: number;
+  reviewNote: string | null;
+  createdAt: string;
+}
+
+export interface EventAttendee { name: string | null; faculty: string | null; status: RegistrationStatus; checkedInAt: string | null; registeredAt: string }
+export interface CheckInCodeResponse { code: string; expiresInSec: number; checkInUrl: string }
+export interface CheckInResponse { checkedInAt: string; reward: number; balance: number; note: string | null }
