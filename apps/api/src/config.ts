@@ -11,6 +11,14 @@ export const config = {
   get jwtSecret() { return required('JWT_SECRET'); },
   get otpSecret() { return required('OTP_SECRET'); },
   get resendApiKey() { return process.env.RESEND_API_KEY || ''; },
+  /**
+   * ส่งอีเมลผ่าน HTTPS ไปยังตัวส่งต่อ (เช่น Google Apps Script ที่ส่งด้วย Gmail — docs/gmail-relay.gs)
+   * ใช้บน Render ฟรีซึ่งบล็อกพอร์ต SMTP
+   */
+  get mailWebhook() {
+    const url = process.env.MAIL_WEBHOOK_URL;
+    return url ? { url, secret: process.env.MAIL_WEBHOOK_SECRET ?? '' } : null;
+  },
   /** ส่งอีเมลผ่าน SMTP (เช่น Gmail + App Password) — ใช้เมื่อไม่มี RESEND_API_KEY */
   get smtp() {
     const host = process.env.SMTP_HOST;

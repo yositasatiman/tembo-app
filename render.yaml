@@ -33,14 +33,11 @@ services:
         value: "true"
       - key: TRUST_PROXY
         value: "true"
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: "465"
-      - key: SMTP_USER
-        sync: false          # อีเมล Gmail ที่ใช้ส่ง OTP
-      - key: SMTP_PASS
-        sync: false          # App Password 16 ตัวของ Gmail (ไม่ใช่รหัสผ่านปกติ)
+      # Render ฟรีบล็อกพอร์ต SMTP → ส่งอีเมลผ่าน Google Apps Script (docs/gmail-relay.gs)
+      - key: MAIL_WEBHOOK_URL
+        sync: false          # URL ของ Web app จาก Apps Script (ลงท้าย /exec)
+      - key: MAIL_WEBHOOK_SECRET
+        generateValue: true  # คัดลอกค่านี้ไปใส่ Script Properties ชื่อ SECRET
       - key: MAIL_FROM
         sync: false          # เช่น TEMBO <yourgmail@gmail.com>
       - key: ADMIN_EMAILS
