@@ -29,7 +29,7 @@ export class MailService {
         return;
       } catch (e) {
         this.log.error(`SMTP error: ${(e as Error).message}`);
-        throw new Error('ส่งอีเมลไม่สำเร็จ');
+        throw new Error('Failed to send email');
       }
     }
     this.log.log(`[DEV MAIL] to=${mail.to} | ${mail.subject} | ${mail.text}`);
@@ -51,7 +51,7 @@ export class MailService {
       if (!res.ok || !ok) throw new Error(`status ${res.status}: ${body.slice(0, 200)}`);
     } catch (e) {
       this.log.error(`Mail webhook error: ${(e as Error).message}`);
-      throw new Error('ส่งอีเมลไม่สำเร็จ');
+      throw new Error('Failed to send email');
     }
   }
 
@@ -63,7 +63,7 @@ export class MailService {
     });
     if (!res.ok) {
       this.log.error(`Resend error ${res.status}: ${await res.text()}`);
-      throw new Error('ส่งอีเมลไม่สำเร็จ');
+      throw new Error('Failed to send email');
     }
   }
 }

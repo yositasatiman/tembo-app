@@ -3,13 +3,14 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CalendarDays } from 'lucide-react';
-import { EVENT_CATEGORY_LABEL, EVENT_FILTERS, type EventFilter, type EventSummary } from '@tembo/shared';
+import { bi, EVENT_CATEGORY_LABEL, EVENT_FILTERS, type EventFilter, type EventSummary } from '@tembo/shared';
 import { api, post } from '@/lib/api';
 import { AppShell, FeedTabs, PageHeading } from '@/components/shell';
 import { EventCard } from '@/components/event/card';
 import { Chip, EmptyState, Spinner, Toast } from '@/components/ui';
+import { useT } from '@/lib/i18n';
 
-const FILTER_LABEL: Record<EventFilter, string> = { all: 'ทั้งหมด', ...EVENT_CATEGORY_LABEL, mine: 'Event ของฉัน' };
+const FILTER_LABEL: Record<EventFilter, string> = { all: bi('All', 'ทั้งหมด'), ...EVENT_CATEGORY_LABEL, mine: bi('My events', 'กิจกรรมของฉัน') };
 
 export default function EventsPage() {
   return <AppShell><Suspense fallback={<Spinner />}><Browse /></Suspense></AppShell>;
@@ -19,6 +20,7 @@ export default function EventsPage() {
 function Browse() {
   const router = useRouter();
   const params = useSearchParams();
+  const { t, p } = useT();
   const raw = params.get('filter') ?? 'all';
   const filter: EventFilter = (EVENT_FILTERS as readonly string[]).includes(raw) ? (raw as EventFilter) : 'all';
   const q = params.get('q') ?? '';
@@ -41,30 +43,30 @@ function Browse() {
     setRows((r) => r?.filter((e) => e.id !== id) ?? r);
     try {
       await post(`/events/${id}/hide`);
-      setToast({ msg: 'ซ่อน Event นี้แล้ว', undo: async () => { await api(`/events/${id}/hide`, { method: 'DELETE' }); setToast(null); load(); } });
+      setToast({ msg: t('Event hidden', 'ซ่อนกิจกรรมนี้แล้ว'), undo: async () => { await api(`/events/${id}/hide`, { method: 'DELETE' }); setToast(null); load(); } });
     } catch (e) { setToast({ msg: (e as Error).message }); load(); }
   }
 
   return (
     <div className="space-y-3">
-      <PageHeading title={q ? `ค้นหา “${q}”` : 'ค้นพบ Event'} subtitle="พบเพื่อนใหม่ เรียนรู้ และออกไปสำรวจรอบ มช." create={{ href: '/events/new', label: 'สร้าง' }} />
+      <PageHeading title={q ? t(`Search “${q}”`, `ค้นหา “${q}”`) : t('Discover events', 'ค้นพบกิจกรรม')} subtitle={t('Meet new friends, learn, and explore around CMU', 'พบเพื่อนใหม่ เรียนรู้ และออกไปสำรวจรอบ มช.')} create={{ href: '/events/new', label: t('Create', 'สร้าง') }} />
       <FeedTabs active="event" />
 
-      <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-0.5" role="tablist" aria-label="ประเภท Event">
-        {EVENT_FILTERS.map((f) => <Chip key={f} active={filter === f} onClick={() => setFilter(f)}>{FILTER_LABEL[f]}</Chip>)}
+      <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-0.5" role="tablist" aria-label={t('Event type', 'ประเภทกิจกรรม')}>
+        {EVENT_FILTERS.map((f) => <Chip key={f} active={filter === f} onClick={() => setFilter(f)}>{p(FILTER_LABEL[f])}</Chip>)}
       </div>
 
       {rows === null ? <Spinner />
         : rows.length === 0 ? (
-          <EmptyState icon={<CalendarDays />} title={filter === 'mine' ? 'ยังไม่มี Event ของคุณ' : 'ยังไม่มี Event ที่เปิดรับ'}
-            text={filter === 'mine' ? 'Event ที่คุณลงทะเบียนหรือเป็นผู้จัดจะแสดงที่นี่' : q ? 'ลองค้นหาด้วยคำอื่น' : 'เป็นคนแรกที่ชวนเพื่อน ๆ มาร่วมงาน'}
-            action={<Link href="/events/new" className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">สร้าง Event</Link>} />
+          <EmptyState icon={<CalendarDays />} title={filter === 'mine' ? t('You have no events yet', 'ยังไม่มีกิจกรรมของคุณ') : t('No open events yet', 'ยังไม่มีกิจกรรมที่เปิดรับ')}
+            text={filter === 'mine' ? t('Events you register for or organize will show up here', 'กิจกรรมที่คุณลงทะเบียนหรือเป็นผู้จัดจะแสดงที่นี่') : q ? t('Try a different search', 'ลองค้นหาด้วยคำอื่น') : t('Be the first to invite your friends', 'เป็นคนแรกที่ชวนเพื่อน ๆ มาร่วมงาน')}
+            action={<Link href="/events/new" className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">{t('Create event', 'สร้างกิจกรรม')}</Link>} />
         ) : (
           <div className="space-y-2.5">
             {rows.map((e) => <EventCard key={e.id} e={e} onHide={filter === 'mine' ? undefined : hide} onToast={(msg) => setToast({ msg })} />)}
           </div>
         )}
-      {toast && <Toast onClose={() => setToast(null)} action={toast.undo ? { label: 'เลิกทำ', onClick: toast.undo } : undefined}>{toast.msg}</Toast>}
+      {toast && <Toast onClose={() => setToast(null)} action={toast.undo ? { label: t('Undo', 'เลิกทำ'), onClick: toast.undo } : undefined}>{toast.msg}</Toast>}
     </div>
   );
 }

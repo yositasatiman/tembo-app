@@ -1,3 +1,4 @@
+import { bi } from '@tembo/shared';
 import {
   CanActivate, createParamDecorator, ExecutionContext, ForbiddenException, Injectable,
   SetMetadata, UnauthorizedException,
@@ -18,13 +19,13 @@ export class AuthGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext) {
     const req = ctx.switchToHttp().getRequest<Request & { user?: AuthUser }>();
     const token = req.cookies?.[ACCESS_COOKIE];
-    if (!token) throw new UnauthorizedException('กรุณาเข้าสู่ระบบ');
+    if (!token) throw new UnauthorizedException(bi('Please log in', 'กรุณาเข้าสู่ระบบ'));
     try {
       const p = await this.jwt.verifyAsync<{ sub: string; role: AuthUser['role'] }>(token);
       req.user = { id: p.sub, role: p.role };
       return true;
     } catch {
-      throw new UnauthorizedException('เซสชันหมดอายุ');
+      throw new UnauthorizedException(bi('Your session has expired', 'เซสชันหมดอายุ'));
     }
   }
 }
@@ -40,7 +41,7 @@ export class RolesGuard implements CanActivate {
     const roles = this.reflector.getAllAndOverride<AuthUser['role'][]>(ROLES_KEY, [ctx.getHandler(), ctx.getClass()]);
     if (!roles?.length) return true;
     const user = ctx.switchToHttp().getRequest<{ user?: AuthUser }>().user;
-    if (!user || !roles.includes(user.role)) throw new ForbiddenException('ไม่มีสิทธิ์');
+    if (!user || !roles.includes(user.role)) throw new ForbiddenException(bi('You do not have permission', 'ไม่มีสิทธิ์'));
     return true;
   }
 }

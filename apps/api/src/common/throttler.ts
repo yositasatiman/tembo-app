@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerException, ThrottlerGuard } from '@nestjs/throttler';
+import { bi } from '@tembo/shared';
 import { ACCESS_COOKIE } from './auth';
 
 /**
@@ -19,5 +20,9 @@ export class ClientThrottlerGuard extends ThrottlerGuard {
       } catch { /* token เสีย → ใช้ IP */ }
     }
     return `ip:${req.ip}`;
+  }
+
+  protected async throwThrottlingException(): Promise<void> {
+    throw new ThrottlerException(bi('Too many requests. Please wait a moment and try again.', 'ส่งคำขอบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่'));
   }
 }

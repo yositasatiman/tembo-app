@@ -44,7 +44,8 @@ describe('Auth & profile', () => {
     const wrong = code === '000000' ? '111111' : '000000';
     for (let i = 0; i < 5; i++) await s.post('/auth/otp/verify').send({ email: 'a@gmail.com', code: wrong }).expect(400);
     const locked = await s.post('/auth/otp/verify').send({ email: 'a@gmail.com', code }).expect(400);
-    expect(locked.body.message).toMatch(/เกินกำหนด/);
+    // ไม่มี cookie ภาษา → ข้อความภาษาอังกฤษ (ค่าเริ่มต้น)
+    expect(locked.body.message).toMatch(/Too many wrong attempts/);
 
     await ageOtps(prisma);
     await s.post('/auth/otp/request').send({ email: 'b@gmail.com' }).expect(200);

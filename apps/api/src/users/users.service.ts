@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { MeResponse, UpdateProfileInput, WalletResponse } from '@tembo/shared';
+import { MeResponse, UpdateProfileInput, WalletResponse, bi } from '@tembo/shared';
 import { OtpService } from '../auth/otp.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -40,9 +40,9 @@ export class UsersService {
 
   async requestCmuVerification(userId: string, cmuEmail: string) {
     const me = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    if (me.cmuVerifiedAt) throw new ConflictException('บัญชีนี้ยืนยันอีเมล CMU แล้ว');
+    if (me.cmuVerifiedAt) throw new ConflictException(bi('This account has already verified a CMU email', 'บัญชีนี้ยืนยันอีเมล CMU แล้ว'));
     const taken = await this.prisma.user.findUnique({ where: { cmuEmail } });
-    if (taken && taken.id !== userId) throw new ConflictException('อีเมล CMU นี้ถูกใช้กับบัญชีอื่นแล้ว');
+    if (taken && taken.id !== userId) throw new ConflictException(bi('This CMU email is already used by another account', 'อีเมล CMU นี้ถูกใช้กับบัญชีอื่นแล้ว'));
     await this.otp.issue('VERIFY_CMU', cmuEmail, userId);
   }
 
@@ -51,7 +51,7 @@ export class UsersService {
     try {
       await this.prisma.user.update({ where: { id: userId }, data: { cmuEmail, cmuVerifiedAt: new Date() } });
     } catch {
-      throw new ConflictException('อีเมล CMU นี้ถูกใช้กับบัญชีอื่นแล้ว');
+      throw new ConflictException(bi('This CMU email is already used by another account', 'อีเมล CMU นี้ถูกใช้กับบัญชีอื่นแล้ว'));
     }
     return this.me(userId);
   }

@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import {
   BadgeCheck, Bell, Bookmark, Check, ChevronRight, ClipboardList, Copy, LogOut, PenLine, Settings, ShieldAlert, ShieldCheck, Ticket,
 } from 'lucide-react';
+import { facultyLabel, interestLabel } from '@tembo/shared';
 import { post } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { AppShell, useMe } from '@/components/shell';
 import { Avatar, Badge, Button, buttonCls, Card, ErrorText, Input, Notice, yearLabel } from '@/components/ui';
 
@@ -16,18 +18,19 @@ export default function MePage() {
 /** Figma: ACCOUNT / Profile */
 function Me() {
   const { me, reload } = useMe();
+  const { t, p, lang } = useT();
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   async function logout() {
-    if (!window.confirm('ออกจากระบบ?')) return;
+    if (!window.confirm(t('Log out?', 'ออกจากระบบ?'))) return;
     await post('/auth/logout').catch(() => undefined);
     router.replace('/login');
   }
   const stats = [
-    { label: 'ตอบแบบสอบถาม', value: me.stats.responses },
-    { label: 'โพสต์แบบสอบถาม', value: me.stats.surveysPosted },
-    { label: 'ลงทะเบียน Event', value: me.stats.eventsJoined },
-    { label: 'เช็กอินแล้ว', value: me.stats.eventsCheckedIn },
+    { label: t('Surveys answered', 'ตอบแบบสอบถาม'), value: me.stats.responses },
+    { label: t('Surveys posted', 'โพสต์แบบสอบถาม'), value: me.stats.surveysPosted },
+    { label: t('Events joined', 'ลงทะเบียนกิจกรรม'), value: me.stats.eventsJoined },
+    { label: t('Checked in', 'เช็กอินแล้ว'), value: me.stats.eventsCheckedIn },
   ];
   return (
     <div className="space-y-3">
@@ -36,14 +39,14 @@ function Me() {
           <Avatar name={me.displayName} />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-extrabold">{me.displayName}</h1>
-            <p className="text-sm text-muted-foreground">คณะ{me.faculty} · {yearLabel(me.studyYear)}</p>
+            <p className="text-sm text-muted-foreground">{me.faculty ? (lang === 'th' ? `คณะ${me.faculty}` : `Faculty of ${p(facultyLabel(me.faculty))}`) : ''} · {yearLabel(me.studyYear, lang)}</p>
             {me.cmuVerified
-              ? <p className="mt-1 flex items-center gap-1 text-xs font-bold text-success"><BadgeCheck className="size-4" />นักศึกษา มช. ที่ยืนยันแล้ว</p>
-              : <a href="#cmu" className="mt-1 flex items-center gap-1 text-xs font-bold text-warning-foreground"><ShieldAlert className="size-4" />ยังไม่ยืนยันอีเมล @cmu.ac.th</a>}
+              ? <p className="mt-1 flex items-center gap-1 text-xs font-bold text-success"><BadgeCheck className="size-4" />{t('Verified CMU student', 'นักศึกษา มช. ที่ยืนยันแล้ว')}</p>
+              : <a href="#cmu" className="mt-1 flex items-center gap-1 text-xs font-bold text-warning-foreground"><ShieldAlert className="size-4" />{t('@cmu.ac.th email not verified', 'ยังไม่ยืนยันอีเมล @cmu.ac.th')}</a>}
           </div>
-          <Link href="/onboarding" className={buttonCls('outline', 'sm')}><PenLine />แก้ไข</Link>
+          <Link href="/onboarding" className={buttonCls('outline', 'sm')}><PenLine />{t('Edit', 'แก้ไข')}</Link>
         </div>
-        <div className="mt-4 flex flex-wrap gap-1.5">{me.interests.map((i) => <span key={i} className="rounded-full bg-lavender-soft px-2.5 py-1 text-xs font-bold text-primary">{i}</span>)}</div>
+        <div className="mt-4 flex flex-wrap gap-1.5">{me.interests.map((i) => <span key={i} className="rounded-full bg-lavender-soft px-2.5 py-1 text-xs font-bold text-primary">{p(interestLabel(i))}</span>)}</div>
         <div className="mt-4 grid grid-cols-4 gap-2 text-center">
           {stats.map((x) => (
             <div key={x.label} className="rounded-xl bg-lavender-soft px-1 py-2">
@@ -55,17 +58,17 @@ function Me() {
       </section>
 
       <Link href="/coin" className="flex items-center justify-between rounded-2xl bg-indigo p-4 text-white shadow-card">
-        <span><span className="block text-xs opacity-80">Coin ของฉัน</span><span className="text-2xl font-extrabold">{me.balance.toLocaleString()}</span></span>
-        <span className="flex items-center gap-1 text-sm font-bold text-coin">ดูประวัติ<ChevronRight className="size-4" /></span>
+        <span><span className="block text-xs opacity-80">{t('My Coin', 'Coin ของฉัน')}</span><span className="text-2xl font-extrabold">{me.balance.toLocaleString()}</span></span>
+        <span className="flex items-center gap-1 text-sm font-bold text-coin">{t('History', 'ดูประวัติ')}<ChevronRight className="size-4" /></span>
       </Link>
 
       <nav className="overflow-hidden rounded-2xl bg-card shadow-card">
         {[
-          { href: '/surveys?tab=saved', label: 'แบบสอบถามที่บันทึกไว้', icon: Bookmark },
-          { href: '/surveys?tab=mine', label: 'แบบสอบถามของฉัน', icon: ClipboardList },
-          { href: '/events?filter=mine', label: 'Event ของฉัน', icon: Ticket },
-          { href: '/notifications', label: 'แจ้งเตือน', icon: Bell },
-          { href: '/onboarding', label: 'แก้ไขโปรไฟล์และความสนใจ', icon: Settings },
+          { href: '/surveys?filter=saved', label: t('Saved surveys', 'แบบสอบถามที่บันทึกไว้'), icon: Bookmark },
+          { href: '/surveys?filter=mine', label: t('My surveys', 'แบบสอบถามของฉัน'), icon: ClipboardList },
+          { href: '/events?filter=mine', label: t('My events', 'กิจกรรมของฉัน'), icon: Ticket },
+          { href: '/notifications', label: t('Notifications', 'แจ้งเตือน'), icon: Bell },
+          { href: '/onboarding', label: t('Edit profile and interests', 'แก้ไขโปรไฟล์และความสนใจ'), icon: Settings },
         ].map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className="flex h-12 items-center gap-3 border-b border-border px-4 text-[15px] font-bold last:border-0 hover:bg-lavender-soft">
             <Icon className="size-5 text-muted-foreground" /><span className="flex-1">{label}</span><ChevronRight className="size-[18px] text-muted-foreground" />
@@ -77,8 +80,8 @@ function Me() {
 
       <section className="flex items-center justify-between gap-3 rounded-2xl bg-card p-4 shadow-card">
         <div>
-          <p className="text-sm font-extrabold">โค้ดชวนเพื่อน</p>
-          <p className="text-xs text-muted-foreground">ให้เพื่อนใส่ตอนสมัคร · {me.email}</p>
+          <p className="text-sm font-extrabold">{t('Referral code', 'โค้ดชวนเพื่อน')}</p>
+          <p className="text-xs text-muted-foreground">{t('Friends enter it when they sign up', 'ให้เพื่อนใส่ตอนสมัคร')} · {me.email}</p>
         </div>
         <button type="button" onClick={() => { navigator.clipboard?.writeText(me.referralCode); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
           className="flex items-center gap-2 rounded-xl bg-lavender-soft px-3 py-2 font-mono text-sm font-extrabold tracking-widest text-primary">
@@ -86,12 +89,13 @@ function Me() {
         </button>
       </section>
 
-      <Button variant="danger" className="w-full" onClick={logout}><LogOut />ออกจากระบบ</Button>
+      <Button variant="danger" className="w-full" onClick={logout}><LogOut />{t('Log out', 'ออกจากระบบ')}</Button>
     </div>
   );
 }
 
 function CmuVerifyCard({ verified, cmuEmail: verifiedEmail, onVerified }: { verified: boolean; cmuEmail: string | null; onVerified: () => void }) {
+  const { t } = useT();
   const [cmuEmail, setCmuEmail] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
@@ -101,7 +105,7 @@ function CmuVerifyCard({ verified, cmuEmail: verifiedEmail, onVerified }: { veri
   if (verified) {
     return (
       <Card id="cmu" className="flex items-center gap-3">
-        <Badge><BadgeCheck />สมาชิกที่ยืนยัน CMU แล้ว</Badge>
+        <Badge><BadgeCheck />{t('CMU verified member', 'สมาชิกที่ยืนยัน CMU แล้ว')}</Badge>
         <span className="text-sm text-muted-foreground">{verifiedEmail}</span>
       </Card>
     );
@@ -119,20 +123,20 @@ function CmuVerifyCard({ verified, cmuEmail: verifiedEmail, onVerified }: { veri
   return (
     <Card id="cmu" className="space-y-4 p-6">
       <div>
-        <h3 className="flex items-center gap-2 font-extrabold"><ShieldCheck className="size-5 text-primary" />ยืนยันว่าเป็นชาว มช.</h3>
-        <p className="text-sm text-muted-foreground">ยืนยันอีเมล @cmu.ac.th เพื่อรับ Coin จากการตอบแบบสอบถาม และขอระบบสมทบได้</p>
+        <h3 className="flex items-center gap-2 font-extrabold"><ShieldCheck className="size-5 text-primary" />{t('Verify you are from CMU', 'ยืนยันว่าเป็นชาว มช.')}</h3>
+        <p className="text-sm text-muted-foreground">{t('Verify your @cmu.ac.th email to earn Coin from surveys and request the launch subsidy.', 'ยืนยันอีเมล @cmu.ac.th เพื่อรับ Coin จากการตอบแบบสอบถาม และขอระบบสมทบได้')}</p>
       </div>
       {!sent ? (
         <form onSubmit={send} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex-1"><Input label="อีเมล CMU" type="email" required placeholder="firstname_l@cmu.ac.th" value={cmuEmail} onChange={(e) => setCmuEmail(e.target.value)} /></div>
-          <Button disabled={loading || !cmuEmail}>ส่งรหัสยืนยัน</Button>
+          <div className="flex-1"><Input label={t('CMU email', 'อีเมล CMU')} type="email" required placeholder="firstname_l@cmu.ac.th" value={cmuEmail} onChange={(e) => setCmuEmail(e.target.value)} /></div>
+          <Button disabled={loading || !cmuEmail}>{t('Send code', 'ส่งรหัสยืนยัน')}</Button>
         </form>
       ) : (
         <form onSubmit={verify} className="space-y-3">
-          <Notice>ส่งรหัส 6 หลักไปที่ {cmuEmail} แล้ว</Notice>
+          <Notice>{t(`We sent a 6-digit code to ${cmuEmail}`, `ส่งรหัส 6 หลักไปที่ ${cmuEmail} แล้ว`)}</Notice>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1"><Input label="รหัสยืนยัน" inputMode="numeric" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} /></div>
-            <Button disabled={loading || code.length !== 6}>ยืนยัน</Button>
+            <div className="flex-1"><Input label={t('Verification code', 'รหัสยืนยัน')} inputMode="numeric" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} /></div>
+            <Button disabled={loading || code.length !== 6}>{t('Verify', 'ยืนยัน')}</Button>
           </div>
         </form>
       )}

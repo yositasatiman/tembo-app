@@ -1,5 +1,5 @@
 import { INestApplication } from '@nestjs/common';
-import { scoreFeedItem, type SurveySummary } from '@tembo/shared';
+import { scoreFeedItem, type SurveySummary, pick } from '@tembo/shared';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { createTestApp, makeUser, resetDb } from './helpers';
 
@@ -26,7 +26,8 @@ describe('ฟีดรวม + จับคู่ความสนใจ', () =
     expect(rich.score).toBe(1.5);
     expect(rich.relevant).toBe(false);
     expect(match.score).toBeGreaterThan(rich.score);
-    expect(match.reasons).toContain('สนใจดนตรี');
+    expect(match.reasons.map((r) => pick(r, 'th'))).toContain('สนใจดนตรี');
+    expect(match.reasons.map((r) => pick(r, 'en'))).toContain('You like Music');
   });
 
   it('all = ใหม่สุดก่อน ไม่รวมของตัวเองและที่ตอบแล้ว / foryou = เฉพาะที่ตรงความสนใจหรือคณะ เรียงตามคะแนน', async () => {

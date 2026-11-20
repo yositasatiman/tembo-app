@@ -1,5 +1,6 @@
 'use client';
 import type { MeResponse } from '@tembo/shared';
+import { clientLang } from './i18n';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public errors?: Record<string, string>) { super(message); }
@@ -29,7 +30,7 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = Array.isArray(body.message) ? body.message[0] : body.message;
-    throw new ApiError(res.status, msg ?? 'เกิดข้อผิดพลาด', body.errors);
+    throw new ApiError(res.status, msg ?? (clientLang() === 'th' ? 'เกิดข้อผิดพลาด' : 'Something went wrong'), body.errors);
   }
   return body as T;
 }

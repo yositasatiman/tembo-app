@@ -1,5 +1,46 @@
 import { z } from 'zod';
 
+// ───────────────────────── ภาษา (EN / TH) ─────────────────────────
+// ข้อความที่สร้างจากเซิร์ฟเวอร์ (error, แจ้งเตือน, ป้าย) เก็บทั้ง 2 ภาษาในสตริงเดียวด้วย bi()
+// แล้วเลือกภาษาตอนส่งออกด้วย pick() ตาม cookie tembo_lang (ค่าเริ่มต้น = อังกฤษ)
+
+export const LANGS = ['en', 'th'] as const;
+export type Lang = (typeof LANGS)[number];
+export const DEFAULT_LANG: Lang = 'en';
+export const LANG_COOKIE = 'tembo_lang';
+const BI_SEP = '\u241E';
+
+/** ข้อความ 2 ภาษา */
+export const bi = (en: string, th: string) => `${en}${BI_SEP}${th}`;
+export const isBi = (s: string) => s.includes(BI_SEP);
+export const asLang = (v: unknown): Lang => (v === 'th' ? 'th' : 'en');
+
+/** เลือกภาษาจากข้อความ bi() — ข้อความธรรมดาคืนตามเดิม */
+export function pick(s: string, lang: Lang): string {
+  const i = s.indexOf(BI_SEP);
+  if (i < 0) return s;
+  return lang === 'th' ? s.slice(i + BI_SEP.length) : s.slice(0, i);
+}
+
+/** pick() ทุกสตริงในอ็อบเจ็กต์/อาร์เรย์ (ใช้กับผลลัพธ์ API ทั้งก้อน) */
+export function pickDeep<T>(v: T, lang: Lang): T {
+  if (typeof v === 'string') return (isBi(v) ? pick(v, lang) : v) as T;
+  if (Array.isArray(v)) return v.map((x) => pickDeep(x, lang)) as T;
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v)) out[k] = pickDeep(x, lang);
+    return out as T;
+  }
+  return v;
+}
+
+/** วันที่แบบ dd/mm/yyyy (ค.ศ., เวลาไทย) ทั้ง 2 ภาษา */
+const DMY = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric' });
+const HM = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+export const fmtDMY = (d: Date | string) => DMY.format(new Date(d));
+export const fmtDMYTime = (d: Date | string) => `${fmtDMY(d)} ${HM.format(new Date(d))}`;
+
+
 /** กฎ Coin ที่ใช้ทั้ง Frontend และ Backend (ดู docs/coin-rules.md) */
 export const COIN_RULES = {
   SIGNUP_BONUS: 100,
@@ -20,10 +61,45 @@ export const INTERESTS = [
   'กีฬา', 'ดนตรี', 'อาสาสมัคร', 'สังคมและวัฒนธรรม', 'วิทยาศาสตร์', 'อาหาร',
 ] as const;
 
-const email = z.string().trim().toLowerCase().email('อีเมลไม่ถูกต้อง').max(254);
+/** ชื่อคณะ/ความสนใจเก็บในฐานข้อมูลเป็นภาษาไทย — แสดงผลภาษาอังกฤษด้วยตารางนี้ */
+export const FACULTY_EN: Record<(typeof FACULTIES)[number], string> = {
+  'มนุษยศาสตร์': 'Humanities', 'ศึกษาศาสตร์': 'Education', 'วิจิตรศิลป์': 'Fine Arts', 'สังคมศาสตร์': 'Social Sciences',
+  'วิทยาศาสตร์': 'Science', 'วิศวกรรมศาสตร์': 'Engineering', 'แพทยศาสตร์': 'Medicine', 'เกษตรศาสตร์': 'Agriculture',
+  'ทันตแพทยศาสตร์': 'Dentistry', 'เภสัชศาสตร์': 'Pharmacy', 'เทคนิคการแพทย์': 'Associated Medical Sciences', 'พยาบาลศาสตร์': 'Nursing',
+  'อุตสาหกรรมเกษตร': 'Agro-Industry', 'สัตวแพทยศาสตร์': 'Veterinary Medicine', 'บริหารธุรกิจ': 'Business Administration',
+  'เศรษฐศาสตร์': 'Economics', 'สถาปัตยกรรมศาสตร์': 'Architecture', 'การสื่อสารมวลชน': 'Mass Communication',
+  'รัฐศาสตร์และรัฐประศาสนศาสตร์': 'Political Science and Public Administration', 'นิติศาสตร์': 'Law', 'สาธารณสุขศาสตร์': 'Public Health',
+  'วิทยาลัยศิลปะ สื่อ และเทคโนโลยี': 'College of Arts, Media and Technology', 'อื่น ๆ': 'Other',
+};
+export const INTEREST_EN: Record<(typeof INTERESTS)[number], string> = {
+  'เทคโนโลยี': 'Technology', 'สุขภาพ': 'Health', 'ธุรกิจ': 'Business', 'ศิลปะและการออกแบบ': 'Art & Design', 'การศึกษา': 'Education',
+  'สิ่งแวดล้อม': 'Environment', 'กีฬา': 'Sports', 'ดนตรี': 'Music', 'อาสาสมัคร': 'Volunteering', 'สังคมและวัฒนธรรม': 'Society & Culture',
+  'วิทยาศาสตร์': 'Science', 'อาหาร': 'Food',
+};
+/** ชื่อคณะ 2 ภาษา (ค่าที่ไม่รู้จักคืนตามเดิม) */
+export const facultyLabel = (v: string) => (v in FACULTY_EN ? bi(FACULTY_EN[v as keyof typeof FACULTY_EN], v) : v);
+export const interestLabel = (v: string) => (v in INTEREST_EN ? bi(INTEREST_EN[v as keyof typeof INTEREST_EN], v) : v);
+
+// ข้อความ error พื้นฐานของ zod เป็น 2 ภาษา (ข้อความที่กำหนดเองใช้ bi() ตรง ๆ)
+z.setErrorMap((issue, ctx) => {
+  const th = (() => {
+    switch (issue.code) {
+      case 'invalid_type': return issue.received === 'undefined' ? 'จำเป็นต้องกรอก' : 'รูปแบบข้อมูลไม่ถูกต้อง';
+      case 'too_small': return issue.type === 'string' ? `ต้องมีอย่างน้อย ${issue.minimum} ตัวอักษร` : issue.type === 'array' ? `ต้องเลือกอย่างน้อย ${issue.minimum} รายการ` : `ต้องไม่น้อยกว่า ${issue.minimum}`;
+      case 'too_big': return issue.type === 'string' ? `ยาวได้ไม่เกิน ${issue.maximum} ตัวอักษร` : issue.type === 'array' ? `เลือกได้ไม่เกิน ${issue.maximum} รายการ` : `ต้องไม่เกิน ${issue.maximum}`;
+      case 'invalid_enum_value': return 'กรุณาเลือกจากรายการ';
+      case 'invalid_string': return 'รูปแบบไม่ถูกต้อง';
+      case 'invalid_date': return 'วันที่ไม่ถูกต้อง';
+      default: return 'ข้อมูลไม่ถูกต้อง';
+    }
+  })();
+  return { message: bi(ctx.defaultError, th) };
+});
+
+const email = z.string().trim().toLowerCase().email(bi('Invalid email address', 'อีเมลไม่ถูกต้อง')).max(254);
 /** ลิงก์ https เท่านั้น */
-export const httpsUrlSchema = z.string().trim().max(500).url('ลิงก์ไม่ถูกต้อง').refine((u) => u.startsWith('https://'), 'ลิงก์ต้องขึ้นต้นด้วย https://');
-const otpCode = z.string().trim().regex(/^\d{6}$/, 'รหัส OTP ต้องเป็นตัวเลข 6 หลัก');
+export const httpsUrlSchema = z.string().trim().max(500).url(bi('Invalid link', 'ลิงก์ไม่ถูกต้อง')).refine((u) => u.startsWith('https://'), bi('Link must start with https://', 'ลิงก์ต้องขึ้นต้นด้วย https://'));
+const otpCode = z.string().trim().regex(/^\d{6}$/, bi('The code must be 6 digits', 'รหัส OTP ต้องเป็นตัวเลข 6 หลัก'));
 
 export const requestOtpSchema = z.object({ email });
 export const verifyOtpSchema = z.object({
@@ -35,10 +111,10 @@ export const updateProfileSchema = z.object({
   displayName: z.string().trim().min(1).max(50),
   faculty: z.enum(FACULTIES),
   studyYear: z.number().int().min(1).max(8),
-  interests: z.array(z.enum(INTERESTS)).min(1, 'เลือกอย่างน้อย 1 ความสนใจ').max(12),
+  interests: z.array(z.enum(INTERESTS)).min(1, bi('Choose at least 1 interest', 'เลือกอย่างน้อย 1 ความสนใจ')).max(12),
 });
 export const requestCmuEmailSchema = z.object({
-  cmuEmail: email.refine((e) => e.endsWith(`@${CMU_EMAIL_DOMAIN}`), 'ต้องเป็นอีเมล @cmu.ac.th'),
+  cmuEmail: email.refine((e) => e.endsWith(`@${CMU_EMAIL_DOMAIN}`), bi('Must be a @cmu.ac.th email', 'ต้องเป็นอีเมล @cmu.ac.th')),
 });
 export const verifyCmuEmailSchema = z.object({ code: otpCode });
 
@@ -125,34 +201,34 @@ export function quoteSurvey(i: { questionCount: number; rewardPerResponse: numbe
   };
 }
 
-const coin = (max: number) => z.number({ invalid_type_error: 'ต้องเป็นตัวเลข' }).int('ต้องเป็นจำนวนเต็ม').min(1).max(max);
+const coin = (max: number) => z.number({ invalid_type_error: bi('Must be a number', 'ต้องเป็นตัวเลข') }).int(bi('Must be a whole number', 'ต้องเป็นจำนวนเต็ม')).min(1).max(max);
 
 // ───────────────────────── คำถาม / คำตอบ (ขั้นที่ 3) ─────────────────────────
 
 export const QUESTION_TYPES = ['SINGLE_CHOICE', 'MULTI_CHOICE', 'SHORT_TEXT', 'LONG_TEXT', 'SCALE'] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
-  SINGLE_CHOICE: 'เลือกได้ 1 ข้อ',
-  MULTI_CHOICE: 'เลือกได้หลายข้อ',
-  SHORT_TEXT: 'ข้อความสั้น',
-  LONG_TEXT: 'ข้อความยาว',
-  SCALE: 'มาตรวัด (คะแนน)',
+  SINGLE_CHOICE: bi('Single choice', 'เลือกได้ 1 ข้อ'),
+  MULTI_CHOICE: bi('Multiple choice', 'เลือกได้หลายข้อ'),
+  SHORT_TEXT: bi('Short text', 'ข้อความสั้น'),
+  LONG_TEXT: bi('Long text', 'ข้อความยาว'),
+  SCALE: bi('Rating scale', 'มาตรวัด (คะแนน)'),
 };
 export const QUESTION_RULES = { MAX_OPTIONS: 10, SCALES: [5, 7, 10] as const, SHORT_TEXT_MAX: 300, LONG_TEXT_MAX: 3000 };
 export const isChoice = (t: QuestionType) => t === 'SINGLE_CHOICE' || t === 'MULTI_CHOICE';
 
 export const questionInputSchema = z.object({
   type: z.enum(QUESTION_TYPES),
-  title: z.string().trim().min(1, 'กรอกคำถาม').max(300),
+  title: z.string().trim().min(1, bi('Enter the question', 'กรอกคำถาม')).max(300),
   required: z.boolean().default(true),
-  options: z.array(z.string().trim().min(1, 'ตัวเลือกห้ามว่าง').max(200)).max(QUESTION_RULES.MAX_OPTIONS).default([]),
+  options: z.array(z.string().trim().min(1, bi('Options cannot be empty', 'ตัวเลือกห้ามว่าง')).max(200)).max(QUESTION_RULES.MAX_OPTIONS).default([]),
   scaleMax: z.number().int().optional(),
   minLabel: z.string().trim().max(50).optional(),
   maxLabel: z.string().trim().max(50).optional(),
 }).superRefine((q, ctx) => {
-  if (isChoice(q.type) && q.options.length < 2) ctx.addIssue({ code: 'custom', path: ['options'], message: 'คำถามแบบเลือกตอบต้องมีอย่างน้อย 2 ตัวเลือก' });
-  if (isChoice(q.type) && new Set(q.options).size !== q.options.length) ctx.addIssue({ code: 'custom', path: ['options'], message: 'ตัวเลือกซ้ำกัน' });
-  if (q.type === 'SCALE' && !QUESTION_RULES.SCALES.includes(q.scaleMax as 5)) ctx.addIssue({ code: 'custom', path: ['scaleMax'], message: 'มาตรวัดต้องเป็น 5, 7 หรือ 10 คะแนน' });
+  if (isChoice(q.type) && q.options.length < 2) ctx.addIssue({ code: 'custom', path: ['options'], message: bi('Choice questions need at least 2 options', 'คำถามแบบเลือกตอบต้องมีอย่างน้อย 2 ตัวเลือก') });
+  if (isChoice(q.type) && new Set(q.options).size !== q.options.length) ctx.addIssue({ code: 'custom', path: ['options'], message: bi('Options must be unique', 'ตัวเลือกซ้ำกัน') });
+  if (q.type === 'SCALE' && !QUESTION_RULES.SCALES.includes(q.scaleMax as 5)) ctx.addIssue({ code: 'custom', path: ['scaleMax'], message: bi('Scale must be 5, 7 or 10 points', 'มาตรวัดต้องเป็น 5, 7 หรือ 10 คะแนน') });
 });
 export type QuestionInput = z.infer<typeof questionInputSchema>;
 
@@ -187,31 +263,31 @@ export function validateAnswers(questions: Pick<Question, 'id' | 'type' | 'requi
   const errors: Record<string, string> = {};
   const clean: Answers = {};
   const known = new Set(questions.map((q) => q.id));
-  for (const key of Object.keys(answers)) if (!known.has(key)) errors[key] = 'ไม่มีคำถามนี้';
+  for (const key of Object.keys(answers)) if (!known.has(key)) errors[key] = bi('Unknown question', 'ไม่มีคำถามนี้');
   for (const q of questions) {
     const v = answers[q.id];
-    if (isBlank(v)) { if (q.required) errors[q.id] = 'ต้องตอบข้อนี้'; continue; }
+    if (isBlank(v)) { if (q.required) errors[q.id] = bi('This question is required', 'ต้องตอบข้อนี้'); continue; }
     switch (q.type) {
       case 'SINGLE_CHOICE':
-        if (typeof v !== 'number' || v < 0 || v >= q.options.length) errors[q.id] = 'เลือกตัวเลือกที่มีอยู่';
+        if (typeof v !== 'number' || v < 0 || v >= q.options.length) errors[q.id] = bi('Choose one of the options', 'เลือกตัวเลือกที่มีอยู่');
         else clean[q.id] = v;
         break;
       case 'MULTI_CHOICE': {
         const arr = Array.isArray(v) ? [...new Set(v)].sort((a, b) => a - b) : null;
-        if (!arr || arr.some((i) => i < 0 || i >= q.options.length)) errors[q.id] = 'เลือกตัวเลือกที่มีอยู่';
+        if (!arr || arr.some((i) => i < 0 || i >= q.options.length)) errors[q.id] = bi('Choose one of the options', 'เลือกตัวเลือกที่มีอยู่');
         else clean[q.id] = arr;
         break;
       }
       case 'SHORT_TEXT':
       case 'LONG_TEXT': {
         const max = q.type === 'SHORT_TEXT' ? QUESTION_RULES.SHORT_TEXT_MAX : QUESTION_RULES.LONG_TEXT_MAX;
-        if (typeof v !== 'string') errors[q.id] = 'ต้องเป็นข้อความ';
-        else if (v.trim().length > max) errors[q.id] = `ยาวได้ไม่เกิน ${max} ตัวอักษร`;
+        if (typeof v !== 'string') errors[q.id] = bi('Must be text', 'ต้องเป็นข้อความ');
+        else if (v.trim().length > max) errors[q.id] = bi(`Up to ${max} characters`, `ยาวได้ไม่เกิน ${max} ตัวอักษร`);
         else clean[q.id] = v.trim();
         break;
       }
       case 'SCALE':
-        if (typeof v !== 'number' || v < 1 || v > (q.scaleMax ?? 5)) errors[q.id] = `ให้คะแนน 1–${q.scaleMax ?? 5}`;
+        if (typeof v !== 'number' || v < 1 || v > (q.scaleMax ?? 5)) errors[q.id] = bi(`Rate 1–${q.scaleMax ?? 5}`, `ให้คะแนน 1–${q.scaleMax ?? 5}`);
         else clean[q.id] = v;
         break;
     }
@@ -232,16 +308,17 @@ export const EXTERNAL_SURVEY_RULES = {
 
 /** หมวดของแบบสอบถาม (Figma: Create Information → Category) */
 export const SURVEY_CATEGORIES = {
-  EDUCATION: 'การศึกษา', HEALTH: 'สุขภาพ', TECHNOLOGY: 'เทคโนโลยี', SOCIAL: 'สังคมและพฤติกรรม',
-  BUSINESS: 'ธุรกิจและการตลาด', ENVIRONMENT: 'สิ่งแวดล้อม', ARTS: 'ศิลปะและการออกแบบ', OTHER: 'อื่น ๆ',
+  EDUCATION: bi('Education', 'การศึกษา'), HEALTH: bi('Health', 'สุขภาพ'), TECHNOLOGY: bi('Technology', 'เทคโนโลยี'),
+  SOCIAL: bi('Society & Behavior', 'สังคมและพฤติกรรม'), BUSINESS: bi('Business & Marketing', 'ธุรกิจและการตลาด'),
+  ENVIRONMENT: bi('Environment', 'สิ่งแวดล้อม'), ARTS: bi('Art & Design', 'ศิลปะและการออกแบบ'), OTHER: bi('Other', 'อื่น ๆ'),
 } as const;
 export type SurveyCategory = keyof typeof SURVEY_CATEGORIES;
 const CATEGORY_KEYS = Object.keys(SURVEY_CATEGORIES) as [SurveyCategory, ...SurveyCategory[]];
 
 /** เวลาทำโดยประมาณ — เก็บค่าสูงสุดของช่วงเป็นนาที */
 export const EST_MINUTES = [
-  { value: 3, label: 'ไม่เกิน 3 นาที' }, { value: 5, label: '3–5 นาที' }, { value: 10, label: '5–10 นาที' },
-  { value: 15, label: '10–15 นาที' }, { value: 30, label: '15–30 นาที' }, { value: 60, label: 'มากกว่า 30 นาที' },
+  { value: 3, label: bi('Under 3 min', 'ไม่เกิน 3 นาที') }, { value: 5, label: bi('3–5 min', '3–5 นาที') }, { value: 10, label: bi('5–10 min', '5–10 นาที') },
+  { value: 15, label: bi('10–15 min', '10–15 นาที') }, { value: 30, label: bi('15–30 min', '15–30 นาที') }, { value: 60, label: bi('Over 30 min', 'มากกว่า 30 นาที') },
 ] as const;
 export const estMinutesLabel = (m: number | null | undefined) => EST_MINUTES.find((e) => e.value === m)?.label ?? null;
 
@@ -249,20 +326,29 @@ export const STUDY_YEARS = [1, 2, 3, 4, 5, 6] as const;
 
 export const REWARD_MODES = ['EQUAL', 'DRAW'] as const;
 export type RewardMode = (typeof REWARD_MODES)[number];
-export const REWARD_MODE_LABEL: Record<RewardMode, string> = { EQUAL: 'ทุกคนได้เท่ากัน', DRAW: 'สุ่มจับรางวัล' };
+export const REWARD_MODE_LABEL: Record<RewardMode, string> = { EQUAL: bi('Same for everyone', 'ทุกคนได้เท่ากัน'), DRAW: bi('Lucky draw', 'สุ่มจับรางวัล') };
 export const DRAW_RULES = { MAX_PRIZES: 10, MAX_PRIZE: 10_000 } as const;
 
 /** วิธีตรวจว่าส่งฟอร์มภายนอกแล้ว: CODE = รหัสเดียวหน้าขอบคุณ (แบบเก่า), SCRIPT = Apps Script ส่งผลอัตโนมัติ */
 export const EXTERNAL_VERIFY = ['CODE', 'SCRIPT'] as const;
 export type ExternalVerify = (typeof EXTERNAL_VERIFY)[number];
 
-/** คำที่ผู้สร้างพิมพ์ในช่อง "รหัส TEMBO" ตอนสร้างลิงก์กรอกล่วงหน้า */
+/** สคริปต์ใช้คำนี้สร้างลิงก์กรอกล่วงหน้า เพื่อบอก TEMBO ว่าช่องรหัสคือ entry ไหน */
 export const PREFILL_PLACEHOLDER = 'TEMBO';
 /** รหัส TEMBO เฉพาะผู้ตอบ เช่น TB7K2M9QXA */
 export const TEMBO_CODE_RE = /^TB[A-Z0-9]{8}$/;
 
+/** ลิงก์ Google Form ทั่วไป: docs.google.com/forms/… หรือ forms.gle/… (ไม่ต้องมีอะไรพิเศษ) */
+export function isGoogleFormUrl(raw: string) {
+  let u: URL;
+  try { u = new URL(raw.trim()); } catch { return false; }
+  if (u.protocol !== 'https:') return false;
+  if (u.hostname === 'forms.gle') return u.pathname.length > 1;
+  return u.hostname === 'docs.google.com' && /^\/forms\/(u\/\d+\/)?d\//.test(u.pathname);
+}
+
 /**
- * แยกลิงก์กรอกล่วงหน้าของ Google Form → ลิงก์ฟอร์ม + ชื่อช่อง entry ของคำถามรหัส TEMBO
+ * แยกลิงก์กรอกล่วงหน้าที่สคริปต์ส่งมา → ลิงก์ฟอร์ม + ชื่อช่อง entry ของคำถามรหัส TEMBO
  * รองรับ https://docs.google.com/forms/d/e/<id>/viewform?usp=pp_url&entry.123=TEMBO
  */
 export function parseGoogleFormPrefill(raw: string): { formUrl: string; entryId: string } | null {
@@ -275,59 +361,59 @@ export function parseGoogleFormPrefill(raw: string): { formUrl: string; entryId:
 }
 
 export const createSurveySchema = z.object({
-  title: z.string().trim().min(3, 'ชื่ออย่างน้อย 3 ตัวอักษร').max(150),
+  title: z.string().trim().min(3, bi('Title needs at least 3 characters', 'ชื่ออย่างน้อย 3 ตัวอักษร')).max(150),
   description: z.string().trim().max(2000).optional(),
   mode: z.enum(SURVEY_MODES).default('IN_APP'),
-  tags: z.array(z.enum(INTERESTS)).max(5, 'เลือกได้ไม่เกิน 5 หัวข้อ').default([]),
-  questions: z.array(questionInputSchema).max(SURVEY_RULES.MAX_QUESTIONS, `ไม่เกิน ${SURVEY_RULES.MAX_QUESTIONS} คำถาม`).default([]),
+  tags: z.array(z.enum(INTERESTS)).max(5, bi('Choose up to 5 tags', 'เลือกได้ไม่เกิน 5 หัวข้อ')).default([]),
+  questions: z.array(questionInputSchema).max(SURVEY_RULES.MAX_QUESTIONS, bi(`Up to ${SURVEY_RULES.MAX_QUESTIONS} questions`, `ไม่เกิน ${SURVEY_RULES.MAX_QUESTIONS} คำถาม`)).default([]),
   /** EXTERNAL เท่านั้น */
   externalUrl: httpsUrlSchema.optional(),
   /** EXTERNAL เท่านั้น: จำนวนข้อในฟอร์มภายนอก (ใช้คิดรางวัลขั้นต่ำและค่าโพสต์) */
-  externalQuestionCount: z.number().int().min(1).max(SURVEY_RULES.MAX_QUESTIONS, `ไม่เกิน ${SURVEY_RULES.MAX_QUESTIONS} ข้อ`).optional(),
+  externalQuestionCount: z.number().int().min(1).max(SURVEY_RULES.MAX_QUESTIONS, bi(`Up to ${SURVEY_RULES.MAX_QUESTIONS} questions`, `ไม่เกิน ${SURVEY_RULES.MAX_QUESTIONS} ข้อ`)).optional(),
   rewardPerResponse: coin(SURVEY_RULES.MAX_REWARD),
   quota: coin(SURVEY_RULES.MAX_QUOTA),
   closesAt: z.coerce.date(),
   ownerContribution: z.number().int().min(0),
   requestSubsidy: z.boolean().default(false),
   category: z.enum(CATEGORY_KEYS).optional(),
-  estMinutes: z.number().int().refine((m) => EST_MINUTES.some((e) => e.value === m), 'เลือกเวลาทำจากรายการ').optional(),
+  estMinutes: z.number().int().refine((m) => EST_MINUTES.some((e) => e.value === m), bi('Choose a completion time from the list', 'เลือกเวลาทำจากรายการ')).optional(),
   eligibleFaculties: z.array(z.enum(FACULTIES)).max(FACULTIES.length).default([]),
   eligibleYears: z.array(z.number().int().min(1).max(8)).max(8).default([]),
   rewardMode: z.enum(REWARD_MODES).default('EQUAL'),
   /** DRAW: รางวัลอันดับ 1, 2, 3, … */
-  prizes: z.array(z.number().int().min(1).max(DRAW_RULES.MAX_PRIZE)).max(DRAW_RULES.MAX_PRIZES, `ไม่เกิน ${DRAW_RULES.MAX_PRIZES} รางวัล`).default([]),
+  prizes: z.array(z.number().int().min(1).max(DRAW_RULES.MAX_PRIZE)).max(DRAW_RULES.MAX_PRIZES, bi(`Up to ${DRAW_RULES.MAX_PRIZES} prizes`, `ไม่เกิน ${DRAW_RULES.MAX_PRIZES} รางวัล`)).default([]),
   /** EXTERNAL: วิธีตรวจการส่ง */
   externalVerify: z.enum(EXTERNAL_VERIFY).default('CODE'),
 }).superRefine((v, ctx) => {
-  if (v.mode === 'EXTERNAL' && v.externalVerify === 'SCRIPT' && v.externalUrl && !parseGoogleFormPrefill(v.externalUrl)) {
-    ctx.addIssue({ code: 'custom', path: ['externalUrl'], message: `ใช้ลิงก์กรอกล่วงหน้าของ Google Form ที่ใส่คำว่า ${PREFILL_PLACEHOLDER} ในช่องรหัส` });
+  if (v.mode === 'EXTERNAL' && v.externalVerify === 'SCRIPT' && v.externalUrl && !isGoogleFormUrl(v.externalUrl)) {
+    ctx.addIssue({ code: 'custom', path: ['externalUrl'], message: bi('Please enter your Google Form link', 'กรุณากรอกลิงก์ Google Form ของคุณ') });
   }
   if (v.rewardMode === 'DRAW') {
     const band = surveyBand(surveyQuestionCount(v));
-    if (!v.prizes.length) ctx.addIssue({ code: 'custom', path: ['prizes'], message: 'ใส่รางวัลอย่างน้อย 1 รางวัล' });
-    if (v.prizes.length > v.quota) ctx.addIssue({ code: 'custom', path: ['prizes'], message: 'จำนวนรางวัลต้องไม่เกินจำนวนผู้ตอบ' });
-    if (band && v.prizes.some((p) => p < band.minReward)) ctx.addIssue({ code: 'custom', path: ['prizes'], message: `แต่ละรางวัลต้องอย่างน้อย ${band.minReward} Coin` });
-    if (v.rewardPerResponse !== Math.max(0, ...v.prizes)) ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: 'rewardPerResponse ต้องเท่ากับรางวัลสูงสุด' });
+    if (!v.prizes.length) ctx.addIssue({ code: 'custom', path: ['prizes'], message: bi('Add at least 1 prize', 'ใส่รางวัลอย่างน้อย 1 รางวัล') });
+    if (v.prizes.length > v.quota) ctx.addIssue({ code: 'custom', path: ['prizes'], message: bi('There cannot be more prizes than participants', 'จำนวนรางวัลต้องไม่เกินจำนวนผู้ตอบ') });
+    if (band && v.prizes.some((p) => p < band.minReward)) ctx.addIssue({ code: 'custom', path: ['prizes'], message: bi(`Each prize must be at least ${band.minReward} Coin`, `แต่ละรางวัลต้องอย่างน้อย ${band.minReward} Coin`) });
+    if (v.rewardPerResponse !== Math.max(0, ...v.prizes)) ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: bi('rewardPerResponse must equal the top prize', 'rewardPerResponse ต้องเท่ากับรางวัลสูงสุด') });
   } else if (v.prizes.length) {
-    ctx.addIssue({ code: 'custom', path: ['prizes'], message: 'ใส่รางวัลรายอันดับเฉพาะแบบสุ่มจับรางวัล' });
+    ctx.addIssue({ code: 'custom', path: ['prizes'], message: bi('Prizes are only for lucky draws', 'ใส่รางวัลรายอันดับเฉพาะแบบสุ่มจับรางวัล') });
   }
-  if (v.mode === 'IN_APP' && v.questions.length < 1) ctx.addIssue({ code: 'custom', path: ['questions'], message: 'ต้องมีอย่างน้อย 1 คำถาม' });
+  if (v.mode === 'IN_APP' && v.questions.length < 1) ctx.addIssue({ code: 'custom', path: ['questions'], message: bi('Add at least 1 question', 'ต้องมีอย่างน้อย 1 คำถาม') });
   if (v.mode === 'EXTERNAL') {
-    if (!v.externalUrl) ctx.addIssue({ code: 'custom', path: ['externalUrl'], message: 'ใส่ลิงก์แบบสอบถาม' });
-    if (!v.externalQuestionCount) ctx.addIssue({ code: 'custom', path: ['externalQuestionCount'], message: 'ระบุจำนวนข้อในแบบสอบถาม' });
-    if (v.questions.length) ctx.addIssue({ code: 'custom', path: ['questions'], message: 'แบบสอบถามลิงก์ภายนอกไม่ต้องสร้างคำถามใน TEMBO' });
+    if (!v.externalUrl) ctx.addIssue({ code: 'custom', path: ['externalUrl'], message: bi('Please enter your survey link', 'กรุณากรอกลิงก์แบบสอบถามของคุณ') });
+    if (!v.externalQuestionCount) ctx.addIssue({ code: 'custom', path: ['externalQuestionCount'], message: bi('Enter the number of questions', 'ระบุจำนวนข้อในแบบสอบถาม') });
+    if (v.questions.length) ctx.addIssue({ code: 'custom', path: ['questions'], message: bi('Link surveys do not need questions in TEMBO', 'แบบสอบถามลิงก์ภายนอกไม่ต้องสร้างคำถามใน TEMBO') });
   }
   const n = surveyQuestionCount(v);
   const band = surveyBand(n);
   if (band && v.rewardPerResponse < band.minReward) {
-    ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: `แบบสอบถาม ${n} ข้อ ต้องให้รางวัลอย่างน้อย ${band.minReward} Coin/คน` });
+    ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: bi(`A ${n}-question survey needs at least ${band.minReward} Coin per person`, `แบบสอบถาม ${n} ข้อ ต้องให้รางวัลอย่างน้อย ${band.minReward} Coin/คน`) });
   }
   const now = Date.now();
   if (v.closesAt.getTime() < now + 60 * 60_000) {
-    ctx.addIssue({ code: 'custom', path: ['closesAt'], message: 'วันปิดรับต้องอยู่ในอนาคตอย่างน้อย 1 ชั่วโมง' });
+    ctx.addIssue({ code: 'custom', path: ['closesAt'], message: bi('The closing date must be at least 1 hour from now', 'วันปิดรับต้องอยู่ในอนาคตอย่างน้อย 1 ชั่วโมง') });
   }
   if (v.closesAt.getTime() > now + SURVEY_RULES.MAX_DURATION_DAYS * 86_400_000) {
-    ctx.addIssue({ code: 'custom', path: ['closesAt'], message: `เปิดรับได้ไม่เกิน ${SURVEY_RULES.MAX_DURATION_DAYS} วัน` });
+    ctx.addIssue({ code: 'custom', path: ['closesAt'], message: bi(`Surveys can stay open for up to ${SURVEY_RULES.MAX_DURATION_DAYS} days`, `เปิดรับได้ไม่เกิน ${SURVEY_RULES.MAX_DURATION_DAYS} วัน`) });
   }
 });
 
@@ -336,7 +422,7 @@ export function surveyQuestionCount(v: { mode?: SurveyMode; questions: unknown[]
   return v.mode === 'EXTERNAL' ? v.externalQuestionCount ?? 0 : v.questions.length;
 }
 
-export const verifyExternalSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{4,12}$/, 'รหัสยืนยันไม่ถูกต้อง') });
+export const verifyExternalSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{4,12}$/, bi('Invalid confirmation code', 'รหัสยืนยันไม่ถูกต้อง')) });
 export type VerifyExternalInput = z.infer<typeof verifyExternalSchema>;
 export interface ExternalStartResponse {
   url: string; refCode: string; startedAt: string; canVerifyAt: string; attemptsLeft: number;
@@ -446,7 +532,7 @@ export interface SurveyResults {
 
 export const EVENT_CATEGORIES = ['UNIVERSITY', 'FACULTY', 'CLUB'] as const;
 export type EventCategory = (typeof EVENT_CATEGORIES)[number];
-export const EVENT_CATEGORY_LABEL: Record<EventCategory, string> = { UNIVERSITY: 'มหาวิทยาลัย', FACULTY: 'คณะ', CLUB: 'ชมรม' };
+export const EVENT_CATEGORY_LABEL: Record<EventCategory, string> = { UNIVERSITY: bi('University', 'มหาวิทยาลัย'), FACULTY: bi('Faculty', 'คณะ'), CLUB: bi('Club', 'ชมรม') };
 
 export const EVENT_RULES = {
   /** ค่าโพสต์ Event (ไม่มีสิทธิ์โพสต์แรกฟรี) — คืนให้ถ้าแอดมินไม่อนุมัติหรือยกเลิกก่อนอนุมัติ */
@@ -473,13 +559,13 @@ export function quoteEvent(i: { rewardPerCheckIn: number; rewardSlots: number })
 const optionalUrl = z.union([httpsUrlSchema, z.literal('').transform(() => undefined)]).optional();
 
 export const createEventSchema = z.object({
-  title: z.string().trim().min(3, 'ชื่ออย่างน้อย 3 ตัวอักษร').max(120),
-  description: z.string().trim().min(10, 'รายละเอียดอย่างน้อย 10 ตัวอักษร').max(3000),
-  hostName: z.string().trim().min(2, 'กรอกชื่อผู้จัด').max(80),
+  title: z.string().trim().min(3, bi('Title needs at least 3 characters', 'ชื่ออย่างน้อย 3 ตัวอักษร')).max(120),
+  description: z.string().trim().min(10, bi('Description needs at least 10 characters', 'รายละเอียดอย่างน้อย 10 ตัวอักษร')).max(3000),
+  hostName: z.string().trim().min(2, bi('Enter the organizer name', 'กรอกชื่อผู้จัด')).max(80),
   category: z.enum(EVENT_CATEGORIES),
-  tags: z.array(z.enum(INTERESTS)).max(EVENT_RULES.MAX_TAGS, `เลือกได้ไม่เกิน ${EVENT_RULES.MAX_TAGS} แท็ก`).default([]),
+  tags: z.array(z.enum(INTERESTS)).max(EVENT_RULES.MAX_TAGS, bi(`Choose up to ${EVENT_RULES.MAX_TAGS} tags`, `เลือกได้ไม่เกิน ${EVENT_RULES.MAX_TAGS} แท็ก`)).default([]),
   coverUrl: optionalUrl,
-  location: z.string().trim().min(2, 'กรอกสถานที่').max(200),
+  location: z.string().trim().min(2, bi('Enter the location', 'กรอกสถานที่')).max(200),
   startsAt: z.coerce.date(),
   endsAt: z.coerce.date(),
   capacity: z.number().int().min(1).max(EVENT_RULES.MAX_CAPACITY).nullable().default(null),
@@ -488,18 +574,18 @@ export const createEventSchema = z.object({
   rewardSlots: z.number().int().min(0).max(EVENT_RULES.MAX_REWARD_SLOTS).default(0),
 }).superRefine((v, ctx) => {
   const now = Date.now();
-  if (v.startsAt.getTime() < now + 60 * 60_000) ctx.addIssue({ code: 'custom', path: ['startsAt'], message: 'เวลาเริ่มต้องอยู่ในอนาคตอย่างน้อย 1 ชั่วโมง' });
-  if (v.startsAt.getTime() > now + EVENT_RULES.MAX_DAYS_AHEAD * 86_400_000) ctx.addIssue({ code: 'custom', path: ['startsAt'], message: `โพสต์ล่วงหน้าได้ไม่เกิน ${EVENT_RULES.MAX_DAYS_AHEAD} วัน` });
-  if (v.endsAt <= v.startsAt) ctx.addIssue({ code: 'custom', path: ['endsAt'], message: 'เวลาจบต้องหลังเวลาเริ่ม' });
-  else if (v.endsAt.getTime() - v.startsAt.getTime() > EVENT_RULES.MAX_DURATION_HOURS * 3_600_000) ctx.addIssue({ code: 'custom', path: ['endsAt'], message: `งานยาวได้ไม่เกิน ${EVENT_RULES.MAX_DURATION_HOURS} ชั่วโมง` });
+  if (v.startsAt.getTime() < now + 60 * 60_000) ctx.addIssue({ code: 'custom', path: ['startsAt'], message: bi('The start time must be at least 1 hour from now', 'เวลาเริ่มต้องอยู่ในอนาคตอย่างน้อย 1 ชั่วโมง') });
+  if (v.startsAt.getTime() > now + EVENT_RULES.MAX_DAYS_AHEAD * 86_400_000) ctx.addIssue({ code: 'custom', path: ['startsAt'], message: bi(`Events can be posted up to ${EVENT_RULES.MAX_DAYS_AHEAD} days ahead`, `โพสต์ล่วงหน้าได้ไม่เกิน ${EVENT_RULES.MAX_DAYS_AHEAD} วัน`) });
+  if (v.endsAt <= v.startsAt) ctx.addIssue({ code: 'custom', path: ['endsAt'], message: bi('The end time must be after the start time', 'เวลาจบต้องหลังเวลาเริ่ม') });
+  else if (v.endsAt.getTime() - v.startsAt.getTime() > EVENT_RULES.MAX_DURATION_HOURS * 3_600_000) ctx.addIssue({ code: 'custom', path: ['endsAt'], message: bi(`Events can last up to ${EVENT_RULES.MAX_DURATION_HOURS} hours`, `งานยาวได้ไม่เกิน ${EVENT_RULES.MAX_DURATION_HOURS} ชั่วโมง`) });
   if (v.rewardPerCheckIn > 0) {
-    if (v.rewardSlots < 1) ctx.addIssue({ code: 'custom', path: ['rewardSlots'], message: 'ระบุจำนวนคนที่ได้รางวัล' });
-    if (v.capacity !== null && v.rewardSlots > v.capacity) ctx.addIssue({ code: 'custom', path: ['rewardSlots'], message: 'จำนวนคนที่ได้รางวัลต้องไม่เกินจำนวนที่รับ' });
-  } else if (v.rewardSlots > 0) ctx.addIssue({ code: 'custom', path: ['rewardPerCheckIn'], message: 'ระบุ Coin ต่อคน หรือตั้งจำนวนคนที่ได้รางวัลเป็น 0' });
+    if (v.rewardSlots < 1) ctx.addIssue({ code: 'custom', path: ['rewardSlots'], message: bi('Enter how many people get the reward', 'ระบุจำนวนคนที่ได้รางวัล') });
+    if (v.capacity !== null && v.rewardSlots > v.capacity) ctx.addIssue({ code: 'custom', path: ['rewardSlots'], message: bi('Reward slots cannot exceed capacity', 'จำนวนคนที่ได้รางวัลต้องไม่เกินจำนวนที่รับ') });
+  } else if (v.rewardSlots > 0) ctx.addIssue({ code: 'custom', path: ['rewardPerCheckIn'], message: bi('Set Coin per person, or set reward slots to 0', 'ระบุ Coin ต่อคน หรือตั้งจำนวนคนที่ได้รางวัลเป็น 0') });
 });
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 
-export const checkInSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{6}$/, 'รหัสเช็กอินไม่ถูกต้อง') });
+export const checkInSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{6}$/, bi('Invalid check-in code', 'รหัสเช็กอินไม่ถูกต้อง')) });
 export type CheckInInput = z.infer<typeof checkInSchema>;
 export const reviewEventSchema = z.object({ approve: z.boolean(), note: z.string().trim().max(500).optional() });
 export type ReviewEventInput = z.infer<typeof reviewEventSchema>;
@@ -583,19 +669,19 @@ export interface FeedViewer { interests: string[]; faculty: string | null }
 export function scoreFeedItem(item: { kind: 'survey'; survey: SurveySummary } | { kind: 'event'; event: EventSummary }, viewer: FeedViewer, now = Date.now()) {
   const tags = item.kind === 'survey' ? item.survey.tags : item.event.tags;
   const matched = tags.filter((t) => viewer.interests.includes(t)).slice(0, 3);
-  const reasons = matched.map((t) => `สนใจ${t}`);
+  const reasons = matched.map((t) => bi(`You like ${INTEREST_EN[t as keyof typeof INTEREST_EN] ?? t}`, `สนใจ${t}`));
   let score = matched.length * 2;
   let relevant = matched.length > 0;
   if (item.kind === 'survey') {
     const s = item.survey;
-    if (viewer.faculty && s.ownerFaculty === viewer.faculty) { score += 1; relevant = true; reasons.push('คณะเดียวกับคุณ'); }
+    if (viewer.faculty && s.ownerFaculty === viewer.faculty) { score += 1; relevant = true; reasons.push(bi('Your faculty', 'คณะเดียวกับคุณ')); }
     const band = surveyBand(s.questionCount);
     if (band) score += Math.min(1.5, s.rewardPerResponse / band.suggestedReward);
-    if (new Date(s.closesAt).getTime() - now < 48 * 3_600_000) { score += 0.5; reasons.push('ใกล้ปิดรับ'); }
+    if (new Date(s.closesAt).getTime() - now < 48 * 3_600_000) { score += 0.5; reasons.push(bi('Closing soon', 'ใกล้ปิดรับ')); }
   } else {
     const e = item.event;
     if (e.rewardPerCheckIn > 0 && e.rewardsLeft > 0) score += 0.5;
-    if (new Date(e.startsAt).getTime() - now < 3 * 86_400_000) { score += 0.5; reasons.push('เร็ว ๆ นี้'); }
+    if (new Date(e.startsAt).getTime() - now < 3 * 86_400_000) { score += 0.5; reasons.push(bi('Coming up', 'เร็ว ๆ นี้')); }
   }
   return { score: Math.round(score * 100) / 100, relevant, reasons };
 }
@@ -605,9 +691,11 @@ export function scoreFeedItem(item: { kind: 'survey'; survey: SurveySummary } | 
 export type TxType = 'SIGNUP_BONUS' | 'ADMIN_ADJUST' | 'POST_FEE' | 'ESCROW_FUND' | 'SUBSIDY' | 'SURVEY_REWARD' | 'ESCROW_REFUND' | 'EVENT_REWARD'
   | 'REWARD_REDEEM' | 'REWARD_REFUND';
 export const TX_LABEL: Record<TxType, string> = {
-  SIGNUP_BONUS: 'โบนัสสมัครสมาชิก', ADMIN_ADJUST: 'ปรับยอดโดยแอดมิน', POST_FEE: 'ค่าโพสต์', ESCROW_FUND: 'ลง Coin รางวัล',
-  SUBSIDY: 'ระบบสมทบ', SURVEY_REWARD: 'รางวัลตอบแบบสอบถาม', ESCROW_REFUND: 'คืน Coin', EVENT_REWARD: 'รางวัลเช็กอิน Event',
-  REWARD_REDEEM: 'แลกของรางวัล', REWARD_REFUND: 'คืน Coin จากการแลกของรางวัล',
+  SIGNUP_BONUS: bi('Sign-up bonus', 'โบนัสสมัครสมาชิก'), ADMIN_ADJUST: bi('Admin adjustment', 'ปรับยอดโดยแอดมิน'),
+  POST_FEE: bi('Posting fee', 'ค่าโพสต์'), ESCROW_FUND: bi('Reward funding', 'ลง Coin รางวัล'), SUBSIDY: bi('Launch subsidy', 'ระบบสมทบ'),
+  SURVEY_REWARD: bi('Survey reward', 'รางวัลตอบแบบสอบถาม'), ESCROW_REFUND: bi('Coin refund', 'คืน Coin'),
+  EVENT_REWARD: bi('Event check-in reward', 'รางวัลเช็กอิน กิจกรรม'), REWARD_REDEEM: bi('Reward redemption', 'แลกของรางวัล'),
+  REWARD_REFUND: bi('Redemption refund', 'คืน Coin จากการแลกของรางวัล'),
 };
 export interface WalletEntry { id: string; delta: number; type: TxType; memo: string | null; createdAt: string }
 export interface WalletResponse { balance: number; earned: number; spent: number; entries: WalletEntry[]; nextBefore: string | null }
@@ -633,11 +721,11 @@ export const REWARD_RULES = {
 
 
 const rewardFields = {
-  title: z.string().trim().min(2, 'ชื่ออย่างน้อย 2 ตัวอักษร').max(80),
-  description: z.string().trim().min(1, 'กรุณาใส่รายละเอียดและวิธีรับของ').max(1000),
+  title: z.string().trim().min(2, bi('Name needs at least 2 characters', 'ชื่ออย่างน้อย 2 ตัวอักษร')).max(80),
+  description: z.string().trim().min(1, bi('Add details and how to collect it', 'กรุณาใส่รายละเอียดและวิธีรับของ')).max(1000),
   imageUrl: optionalUrl,
-  cost: z.coerce.number().int().min(1, 'ราคาอย่างน้อย 1 Coin').max(REWARD_RULES.MAX_COST),
-  stock: z.coerce.number().int().min(0, 'จำนวนต้องไม่ติดลบ').max(REWARD_RULES.MAX_STOCK),
+  cost: z.coerce.number().int().min(1, bi('Price must be at least 1 Coin', 'ราคาอย่างน้อย 1 Coin')).max(REWARD_RULES.MAX_COST),
+  stock: z.coerce.number().int().min(0, bi('Stock cannot be negative', 'จำนวนต้องไม่ติดลบ')).max(REWARD_RULES.MAX_STOCK),
   perUserLimit: z.coerce.number().int().min(1).max(REWARD_RULES.MAX_PER_USER),
   active: z.boolean(),
 };
@@ -652,11 +740,11 @@ export type UpdateRewardInput = z.input<typeof updateRewardSchema>;
 export const decideRedemptionSchema = z.object({
   action: z.enum(['FULFILL', 'CANCEL']),
   note: z.string().trim().max(300).optional(),
-}).refine((v) => v.action === 'FULFILL' || !!v.note, { message: 'กรุณาใส่เหตุผลที่ยกเลิก', path: ['note'] });
+}).refine((v) => v.action === 'FULFILL' || !!v.note, { message: bi('Please give a reason for cancelling', 'กรุณาใส่เหตุผลที่ยกเลิก'), path: ['note'] });
 export type DecideRedemptionInput = z.infer<typeof decideRedemptionSchema>;
 
 export type RedemptionStatus = 'PENDING' | 'FULFILLED' | 'CANCELLED';
-export const REDEMPTION_STATUS_LABEL: Record<RedemptionStatus, string> = { PENDING: 'รอรับของ', FULFILLED: 'ได้รับแล้ว', CANCELLED: 'ยกเลิกแล้ว' };
+export const REDEMPTION_STATUS_LABEL: Record<RedemptionStatus, string> = { PENDING: bi('Waiting for pickup', 'รอรับของ'), FULFILLED: bi('Received', 'ได้รับแล้ว'), CANCELLED: bi('Cancelled', 'ยกเลิกแล้ว') };
 
 export interface RewardItem {
   id: string; title: string; description: string; imageUrl: string | null; cost: number; stock: number;
@@ -674,9 +762,9 @@ export interface AdminRedemptionItem extends RedemptionItem {
 
 // ───────────────────────── แอดมิน: เพิ่ม Coin ทดสอบ ─────────────────────────
 export const grantCoinSchema = z.object({
-  email: z.string().trim().toLowerCase().email('อีเมลไม่ถูกต้อง'),
-  amount: z.coerce.number().int().min(1).max(100_000, 'เพิ่มได้ครั้งละไม่เกิน 100,000 Coin'),
-  memo: z.string().trim().min(1, 'กรุณาใส่เหตุผล').max(120),
+  email: z.string().trim().toLowerCase().email(bi('Invalid email address', 'อีเมลไม่ถูกต้อง')),
+  amount: z.coerce.number().int().min(1).max(100_000, bi('Up to 100,000 Coin at a time', 'เพิ่มได้ครั้งละไม่เกิน 100,000 Coin')),
+  memo: z.string().trim().min(1, bi('Please give a reason', 'กรุณาใส่เหตุผล')).max(120),
 });
 export type GrantCoinInput = z.infer<typeof grantCoinSchema>;
 
@@ -684,7 +772,21 @@ export type GrantCoinInput = z.infer<typeof grantCoinSchema>;
 export const formHookSchema = z.object({
   secret: z.string().min(16).max(128),
   ping: z.boolean().optional(),
+  /** ping: ลิงก์กรอกล่วงหน้าที่สคริปต์สร้าง (ช่องรหัสใส่คำว่า TEMBO) — บอกว่าช่องรหัสคือ entry ไหน */
+  prefillUrl: z.string().max(2000).optional(),
   /** ข้อความทุกช่องที่เป็นรูปแบบรหัส TEMBO ในคำตอบที่ส่ง */
   codes: z.array(z.string().trim().toUpperCase()).max(20).default([]),
 });
 export type FormHookInput = z.infer<typeof formHookSchema>;
+
+// ───────────────────────── ฉบับร่างแบบสอบถาม ─────────────────────────
+export const DRAFT_RULES = { MAX_PER_USER: 20, MAX_BYTES: 20_000 } as const;
+export const saveDraftSchema = z.object({
+  title: z.string().trim().max(150).default(''),
+  stepsDone: z.number().int().min(0).max(4),
+  /** ข้อมูลฟอร์มทั้งหมด (โครงสร้างตามหน้าเว็บ) */
+  data: z.record(z.unknown()),
+});
+export type SaveDraftInput = z.input<typeof saveDraftSchema>;
+export interface DraftSummary { id: string; title: string; stepsDone: number; updatedAt: string }
+export interface DraftDetail extends DraftSummary { data: Record<string, unknown> }

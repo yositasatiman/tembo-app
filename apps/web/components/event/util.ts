@@ -1,22 +1,24 @@
-import type { EventCategory, EventDetail, EventSummary } from '@tembo/shared';
+import type { EventCategory, EventDetail, EventSummary, Lang } from '@tembo/shared';
 
 const TZ = 'Asia/Bangkok';
-const day = (d: Date, opts: Intl.DateTimeFormatOptions) => d.toLocaleDateString('th-TH', { timeZone: TZ, ...opts });
-const time = (d: Date) => d.toLocaleTimeString('th-TH', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
-const sameDay = (a: Date, b: Date) => day(a, { dateStyle: 'short' }) === day(b, { dateStyle: 'short' });
+const loc = (lang: Lang) => (lang === 'th' ? 'th-TH' : 'en-GB');
+const day = (d: Date, lang: Lang, opts: Intl.DateTimeFormatOptions) => d.toLocaleDateString(loc(lang), { timeZone: TZ, ...opts });
+const time = (d: Date) => d.toLocaleTimeString('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const sameDay = (a: Date, b: Date) => day(a, 'en', { dateStyle: 'short' }) === day(b, 'en', { dateStyle: 'short' });
 
-/** "พฤ. 8 ต.ค. · 17:00–21:00" (การ์ด) */
-export function eventTimeShort(startIso: string, endIso: string) {
+/** "Thu 8 Oct · 17:00–21:00" / "พฤ. 8 ต.ค. · 17:00–21:00" (การ์ด) */
+export function eventTimeShort(startIso: string, endIso: string, lang: Lang) {
   const s = new Date(startIso); const e = new Date(endIso);
-  const d = day(s, { weekday: 'short', day: 'numeric', month: 'short' });
-  return sameDay(s, e) ? `${d} · ${time(s)}–${time(e)}` : `${d} ${time(s)} – ${day(e, { day: 'numeric', month: 'short' })} ${time(e)}`;
+  const d = day(s, lang, { weekday: 'short', day: 'numeric', month: 'short' });
+  return sameDay(s, e) ? `${d} · ${time(s)}–${time(e)}` : `${d} ${time(s)} – ${day(e, lang, { day: 'numeric', month: 'short' })} ${time(e)}`;
 }
 
-/** "วันพฤหัสบดีที่ 8 ตุลาคม 2569 · 17:00–21:00 น." (หน้ารายละเอียด) */
-export function eventTimeLong(startIso: string, endIso: string) {
+/** "Thursday, 8 October 2026 · 17:00–21:00" / "วันพฤหัสบดีที่ 8 ตุลาคม 2569 · 17:00–21:00 น." (หน้ารายละเอียด) */
+export function eventTimeLong(startIso: string, endIso: string, lang: Lang) {
   const s = new Date(startIso); const e = new Date(endIso);
-  const d = day(s, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  return sameDay(s, e) ? `${d} · ${time(s)}–${time(e)} น.` : `${d} ${time(s)} น. – ${day(e, { weekday: 'short', day: 'numeric', month: 'short' })} ${time(e)} น.`;
+  const n = lang === 'th' ? ' น.' : '';
+  const d = day(s, lang, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return sameDay(s, e) ? `${d} · ${time(s)}–${time(e)}${n}` : `${d} ${time(s)}${n} – ${day(e, lang, { weekday: 'short', day: 'numeric', month: 'short' })} ${time(e)}${n}`;
 }
 
 export const timeOnly = (iso: string) => time(new Date(iso));
@@ -66,10 +68,10 @@ export function downloadIcs(e: EventDetail, url: string) {
 }
 
 /** แชร์ลิงก์ (มือถือใช้ share sheet, คอมพิวเตอร์คัดลอกลิงก์) — คืนข้อความแจ้งผล */
-export async function shareLink(title: string, path: string): Promise<string | null> {
+export async function shareLink(title: string, path: string, t: (en: string, th: string) => string): Promise<string | null> {
   const url = `${window.location.origin}${path}`;
   if (navigator.share) {
     try { await navigator.share({ title, url }); return null; } catch { return null; }
   }
-  try { await navigator.clipboard.writeText(url); return 'คัดลอกลิงก์แล้ว'; } catch { return url; }
+  try { await navigator.clipboard.writeText(url); return t('Link copied', 'คัดลอกลิงก์แล้ว'); } catch { return url; }
 }

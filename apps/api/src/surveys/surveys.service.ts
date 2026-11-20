@@ -7,6 +7,7 @@ import { Prisma, SYSTEM_WALLETS } from '@tembo/db';
 import {
   Answers, CreateSurveyInput, EXTERNAL_SURVEY_RULES, ExternalStartResponse, FormHookInput, parseGoogleFormPrefill, Question, QuestionResult, quoteSurvey,
   SURVEY_RULES, SurveyCategory, SurveyDetail, SurveyForm, SurveyQuoteResponse, SurveyResults, SurveySummary, surveyQuestionCount, TEMBO_CODE_RE, validateAnswers,
+  bi, FACULTY_EN, facultyLabel, fmtDMYTime, Lang, pick,
 } from '@tembo/shared';
 import { config } from '../config';
 import { LedgerService, Tx } from '../ledger/ledger.service';
@@ -71,9 +72,9 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
     const remainingSlots = Math.max(0, SURVEY_RULES.SUBSIDY_MAX_SURVEYS - used);
     const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { cmuVerifiedAt: true } });
     let reason: string | null = null;
-    if (!user.cmuVerifiedAt) reason = 'ต้องยืนยันอีเมล @cmu.ac.th ก่อนจึงจะขอระบบสมทบได้';
-    else if (await db.survey.count({ where: { ownerId: userId, subsidyStatus: { in: ['PENDING', 'APPROVED'] } } })) reason = 'คุณใช้สิทธิ์ระบบสมทบไปแล้ว (1 คนได้ 1 ครั้ง)';
-    else if (remainingSlots === 0) reason = `สิทธิ์ระบบสมทบครบ ${SURVEY_RULES.SUBSIDY_MAX_SURVEYS} แบบสอบถามแล้ว`;
+    if (!user.cmuVerifiedAt) reason = bi('Verify your @cmu.ac.th email to request the launch subsidy', 'ต้องยืนยันอีเมล @cmu.ac.th ก่อนจึงจะขอระบบสมทบได้');
+    else if (await db.survey.count({ where: { ownerId: userId, subsidyStatus: { in: ['PENDING', 'APPROVED'] } } })) reason = bi('You have already used your launch subsidy (once per person)', 'คุณใช้สิทธิ์ระบบสมทบไปแล้ว (1 คนได้ 1 ครั้ง)');
+    else if (remainingSlots === 0) reason = bi(`The launch subsidy has been used by all ${SURVEY_RULES.SUBSIDY_MAX_SURVEYS} surveys`, `สิทธิ์ระบบสมทบครบ ${SURVEY_RULES.SUBSIDY_MAX_SURVEYS} แบบสอบถามแล้ว`);
     return { eligible: !reason, reason, remainingSlots };
   }
 
@@ -99,15 +100,14 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       const draw = input.rewardMode === 'DRAW';
       const prizes = draw ? [...input.prizes].sort((a, b) => b - a) : [];
       const q = quoteSurvey({ ...input, questionCount, isFirstPost, withSubsidy: input.requestSubsidy, prizes })!;
-      const script = external && input.externalVerify === 'SCRIPT' ? parseGoogleFormPrefill(input.externalUrl!) : null;
-      if (external && input.externalVerify === 'SCRIPT' && !script) throw new BadRequestException('ลิงก์กรอกล่วงหน้าของ Google Form ไม่ถูกต้อง');
+      const script = external && input.externalVerify === 'SCRIPT';
       if (input.ownerContribution < q.minOwnerContribution) {
         throw new BadRequestException(draw
-          ? `สุ่มจับรางวัลต้องลง Coin ครบ ${q.minOwnerContribution} ตั้งแต่แรก`
-          : `ต้องลง Coin อย่างน้อย ${q.minOwnerContribution} (พอจ่ายผู้ตอบ 1 คน)`);
+          ? bi(`A lucky draw needs the full ${q.minOwnerContribution} Coin up front`, `สุ่มจับรางวัลต้องลง Coin ครบ ${q.minOwnerContribution} ตั้งแต่แรก`)
+          : bi(`Put in at least ${q.minOwnerContribution} Coin (enough for 1 participant)`, `ต้องลง Coin อย่างน้อย ${q.minOwnerContribution} (พอจ่ายผู้ตอบ 1 คน)`));
       }
       if (input.ownerContribution > q.maxOwnerContribution) {
-        throw new BadRequestException(`ลง Coin ได้สูงสุด ${q.maxOwnerContribution} (ยอดรางวัลรวม${q.subsidyAmount ? ' หักส่วนที่ระบบสมทบ' : ''})`);
+        throw new BadRequestException(bi(`You can put in up to ${q.maxOwnerContribution} Coin (the reward pool${q.subsidyAmount ? ' minus the subsidy' : ''})`, `ลง Coin ได้สูงสุด ${q.maxOwnerContribution} (ยอดรางวัลรวม${q.subsidyAmount ? ' หักส่วนที่ระบบสมทบ' : ''})`));
       }
 
       const escrow = await tx.wallet.create({ data: { kind: 'ESCROW' } });
@@ -118,9 +118,10 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
           description: input.description || null,
           tags: [...new Set(input.tags)],
           mode: input.mode,
-          externalUrl: script ? script.formUrl : external ? input.externalUrl : null,
+          // แบบสคริปต์: ลิงก์ที่ผู้สร้างวางไว้ใช้ก่อน แล้วสคริปต์ส่งลิงก์จริง + ช่องรหัสมาตอนเชื่อม
+          externalUrl: external ? input.externalUrl : null,
           completionCode: external && !script ? randomCode() : null,
-          codeEntryId: script?.entryId ?? null,
+          codeEntryId: null,
           webhookSecret: script ? randomBytes(24).toString('base64url') : null,
           category: input.category ?? null,
           estMinutes: input.estMinutes ?? null,
@@ -152,7 +153,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       const owner = await tx.wallet.findUniqueOrThrow({ where: { userId } });
       if (q.postFee > 0) {
         await this.ledger.post(tx, {
-          type: 'POST_FEE', idempotencyKey: `survey:${survey.id}:fee`, memo: `ค่าโพสต์แบบสอบถาม "${survey.title}"`,
+          type: 'POST_FEE', idempotencyKey: `survey:${survey.id}:fee`, memo: bi(`Posting fee for survey "${survey.title}"`, `ค่าโพสต์แบบสอบถาม "${survey.title}"`),
           entries: [{ walletId: owner.id, delta: -q.postFee }, { walletId: SYSTEM_WALLETS.BURN, delta: q.postFee }],
         });
       }
@@ -165,7 +166,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   private async fund(tx: Tx, survey: { id: string; title: string; escrowWalletId: string }, userId: string, walletId: string, amount: number, kind: 'OWNER' | 'SPONSOR') {
     await this.ledger.post(tx, {
       type: 'ESCROW_FUND', idempotencyKey: `survey:${survey.id}:fund:${randomUUID()}`,
-      memo: kind === 'OWNER' ? `ลง Coin ในแบบสอบถาม "${survey.title}"` : `สนับสนุนแบบสอบถาม "${survey.title}"`,
+      memo: kind === 'OWNER' ? bi(`Reward Coin for survey "${survey.title}"`, `ลง Coin ในแบบสอบถาม "${survey.title}"`) : bi(`Sponsored survey "${survey.title}"`, `สนับสนุนแบบสอบถาม "${survey.title}"`),
       entries: [{ walletId, delta: -amount }, { walletId: survey.escrowWalletId, delta: amount }],
     });
     await tx.surveyContribution.upsert({
@@ -179,7 +180,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
 
   private async lock(tx: Tx, id: string) {
     const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Survey" WHERE id = ${id} FOR UPDATE`;
-    if (!rows.length) throw new NotFoundException('ไม่พบแบบสอบถาม');
+    if (!rows.length) throw new NotFoundException(bi('Survey not found', 'ไม่พบแบบสอบถาม'));
     return tx.survey.findUniqueOrThrow({ where: { id }, include: { ...surveyInclude, contributions: true } });
   }
 
@@ -194,19 +195,19 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   async sponsor(userId: string, id: string, amount: number) {
     await this.prisma.$transaction(async (tx) => {
       const s = await this.lock(tx, id);
-      if (s.status === 'CLOSED' || s.closesAt <= new Date()) throw new BadRequestException('แบบสอบถามนี้ปิดรับแล้ว');
+      if (s.status === 'CLOSED' || s.closesAt <= new Date()) throw new BadRequestException(bi('This survey is closed', 'แบบสอบถามนี้ปิดรับแล้ว'));
       if (await tx.surveyResponse.findUnique({ where: { surveyId_userId: { surveyId: id, userId } } })) {
-        throw new BadRequestException('คุณตอบแบบสอบถามนี้ไปแล้ว จึงสนับสนุนไม่ได้');
+        throw new BadRequestException(bi('You already answered this survey, so you cannot sponsor it', 'คุณตอบแบบสอบถามนี้ไปแล้ว จึงสนับสนุนไม่ได้'));
       }
       const remaining = this.remainingToFund(s);
-      if (remaining === 0) throw new BadRequestException('ยอดรางวัลครบแล้ว');
-      if (amount > remaining) throw new BadRequestException(`สนับสนุนได้อีกไม่เกิน ${remaining} Coin`);
+      if (remaining === 0) throw new BadRequestException(bi('The reward pool is already full', 'ยอดรางวัลครบแล้ว'));
+      if (amount > remaining) throw new BadRequestException(bi(`You can sponsor up to ${remaining} more Coin`, `สนับสนุนได้อีกไม่เกิน ${remaining} Coin`));
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
       await this.fund(tx, s, userId, wallet.id, amount, s.ownerId === userId ? 'OWNER' : 'SPONSOR');
       if (s.ownerId !== userId) {
         const who = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { displayName: true } });
         await this.notifications.notify(tx, [s.ownerId],
-          { type: 'SURVEY_SPONSORED', title: 'มีเพื่อนช่วยสนับสนุน', body: `${who.displayName ?? 'เพื่อน'} ลง ${amount} Coin ใน "${s.title}"`, link: `/surveys/${id}` });
+          { type: 'SURVEY_SPONSORED', title: bi('A friend sponsored your survey', 'มีเพื่อนช่วยสนับสนุน'), body: bi(`${who.displayName ?? 'A friend'} added ${amount} Coin to "${s.title}"`, `${who.displayName ?? 'เพื่อน'} ลง ${amount} Coin ใน "${s.title}"`), link: `/surveys/${id}` });
       }
     });
     return this.detail(id, userId);
@@ -230,10 +231,10 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   async reviewSubsidy(adminId: string, id: string, approve: boolean, note?: string) {
     await this.prisma.$transaction(async (tx) => {
       const s = await this.lock(tx, id);
-      if (s.subsidyStatus !== 'PENDING') throw new ConflictException('แบบสอบถามนี้ไม่ได้รอการตรวจ');
+      if (s.subsidyStatus !== 'PENDING') throw new ConflictException(bi('This survey is not waiting for review', 'แบบสอบถามนี้ไม่ได้รอการตรวจ'));
       if (approve) {
         await this.ledger.post(tx, {
-          type: 'SUBSIDY', idempotencyKey: `survey:${id}:subsidy`, memo: `ระบบสมทบแบบสอบถาม "${s.title}"`,
+          type: 'SUBSIDY', idempotencyKey: `survey:${id}:subsidy`, memo: bi(`Launch subsidy for survey "${s.title}"`, `ระบบสมทบแบบสอบถาม "${s.title}"`),
           entries: [{ walletId: SYSTEM_WALLETS.MINT, delta: -s.subsidyAmount }, { walletId: s.escrowWalletId, delta: s.subsidyAmount }],
         });
         await tx.surveyContribution.create({ data: { surveyId: id, kind: 'SUBSIDY', key: SYSTEM_KEY, amount: s.subsidyAmount } });
@@ -248,8 +249,8 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
         },
       });
       await this.notifications.notify(tx, [s.ownerId], approve
-        ? { type: 'SUBSIDY_APPROVED', title: 'ได้รับระบบสมทบ', body: `TEMBO สมทบ ${s.subsidyAmount} Coin ให้ "${s.title}" แล้ว เปิดรับคำตอบได้`, link: `/surveys/${id}` }
-        : { type: 'SUBSIDY_REJECTED', title: 'ไม่ได้รับระบบสมทบ', body: `"${s.title}"${note ? ` — ${note}` : ''} · เปิดรับคำตอบตามปกติ`, link: `/surveys/${id}` });
+        ? { type: 'SUBSIDY_APPROVED', title: bi('Subsidy approved', 'ได้รับระบบสมทบ'), body: bi(`TEMBO added ${s.subsidyAmount} Coin to "${s.title}". It is now open for responses.`, `TEMBO สมทบ ${s.subsidyAmount} Coin ให้ "${s.title}" แล้ว เปิดรับคำตอบได้`), link: `/surveys/${id}` }
+        : { type: 'SUBSIDY_REJECTED', title: bi('Subsidy not approved', 'ไม่ได้รับระบบสมทบ'), body: bi(`"${s.title}"${note ? ` — ${note}` : ''} · open for responses as usual`, `"${s.title}"${note ? ` — ${note}` : ''} · เปิดรับคำตอบตามปกติ`), link: `/surveys/${id}` });
       this.log.log(`subsidy ${approve ? 'approved' : 'rejected'} survey=${id} by admin=${adminId}`);
     });
   }
@@ -260,11 +261,11 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   async recordResponse(userId: string, id: string, answers: Answers) {
     return this.prisma.$transaction(async (tx) => {
       const s = await this.lock(tx, id);
-      if (s.mode === 'EXTERNAL') throw new BadRequestException('แบบสอบถามนี้ใช้ลิงก์ภายนอก ให้กรอกรหัสยืนยันแทน');
+      if (s.mode === 'EXTERNAL') throw new BadRequestException(bi('This survey uses an external link. Enter the confirmation code instead.', 'แบบสอบถามนี้ใช้ลิงก์ภายนอก ให้กรอกรหัสยืนยันแทน'));
       await this.assertCanRespond(tx, s, userId);
       const questions = await tx.surveyQuestion.findMany({ where: { surveyId: id }, orderBy: { order: 'asc' } });
       const check = validateAnswers(questions, answers);
-      if (!check.ok) throw new BadRequestException({ message: 'กรุณาตอบให้ครบและถูกต้อง', errors: check.errors });
+      if (!check.ok) throw new BadRequestException({ message: bi('Please answer every required question correctly', 'กรุณาตอบให้ครบและถูกต้อง'), errors: check.errors });
       return this.pay(tx, s, userId, check.clean);
     });
   }
@@ -286,7 +287,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       return { reward: 0, entered: true, balance: after.balance };
     }
     await this.ledger.post(tx, {
-      type: 'SURVEY_REWARD', idempotencyKey: `survey:${s.id}:resp:${userId}`, memo: `รางวัลตอบแบบสอบถาม "${s.title}"`,
+      type: 'SURVEY_REWARD', idempotencyKey: `survey:${s.id}:resp:${userId}`, memo: bi(`Reward for answering "${s.title}"`, `รางวัลตอบแบบสอบถาม "${s.title}"`),
       entries: [{ walletId: s.escrowWalletId, delta: -s.rewardPerResponse }, { walletId: wallet.id, delta: s.rewardPerResponse }],
     });
     await tx.surveyResponse.create({ data: { surveyId: s.id, userId, reward: s.rewardPerResponse, answers } });
@@ -316,8 +317,8 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   /** ผู้ตอบกด "เปิดแบบสอบถาม" — บันทึกเวลาเริ่ม (ครั้งแรกเท่านั้น) แล้วคืนลิงก์ */
   async startExternal(userId: string, id: string): Promise<ExternalStartResponse> {
     const s = await this.prisma.survey.findUnique({ where: { id }, include: { ...surveyInclude, contributions: true } });
-    if (!s) throw new NotFoundException('ไม่พบแบบสอบถาม');
-    if (s.mode !== 'EXTERNAL') throw new BadRequestException('แบบสอบถามนี้ตอบใน TEMBO');
+    if (!s) throw new NotFoundException(bi('Survey not found', 'ไม่พบแบบสอบถาม'));
+    if (s.mode !== 'EXTERNAL') throw new BadRequestException(bi('This survey is answered inside TEMBO', 'แบบสอบถามนี้ตอบใน TEMBO'));
     await this.assertCanRespond(this.prisma, s, userId);
     const start = await this.prisma.surveyStart.upsert({
       where: { surveyId_userId: { surveyId: id, userId } },
@@ -331,39 +332,39 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
     // นับครั้งที่ผิดนอกธุรกรรมจ่ายเงิน เพื่อไม่ให้ถูก rollback ไปพร้อม error
     const outcome = await this.prisma.$transaction(async (tx) => {
       const s = await this.lock(tx, id);
-      if (s.mode !== 'EXTERNAL') throw new BadRequestException('แบบสอบถามนี้ตอบใน TEMBO');
-      if (s.webhookSecret) throw new BadRequestException('แบบสอบถามนี้ตรวจการส่งอัตโนมัติ ไม่ต้องกรอกรหัส');
+      if (s.mode !== 'EXTERNAL') throw new BadRequestException(bi('This survey is answered inside TEMBO', 'แบบสอบถามนี้ตอบใน TEMBO'));
+      if (s.webhookSecret) throw new BadRequestException(bi('This survey checks submissions automatically. No code needed.', 'แบบสอบถามนี้ตรวจการส่งอัตโนมัติ ไม่ต้องกรอกรหัส'));
       await this.assertCanRespond(tx, s, userId);
       const start = await tx.surveyStart.findUnique({ where: { surveyId_userId: { surveyId: id, userId } } });
-      if (!start) throw new BadRequestException('กด "เปิดแบบสอบถาม" ก่อน แล้วค่อยกรอกรหัสยืนยัน');
-      if (start.failedAttempts >= EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS) throw new ForbiddenException(`กรอกรหัสผิดครบ ${EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS} ครั้งแล้ว ติดต่อผู้โพสต์`);
+      if (!start) throw new BadRequestException(bi('Tap "Open survey" first, then enter the confirmation code', 'กด "เปิดแบบสอบถาม" ก่อน แล้วค่อยกรอกรหัสยืนยัน'));
+      if (start.failedAttempts >= EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS) throw new ForbiddenException(bi(`You entered a wrong code ${EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS} times. Please contact the survey owner.`, `กรอกรหัสผิดครบ ${EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS} ครั้งแล้ว ติดต่อผู้โพสต์`));
       const wait = start.startedAt.getTime() + EXTERNAL_SURVEY_RULES.MIN_SECONDS * 1000 - Date.now();
-      if (wait > 0) throw new BadRequestException(`ทำแบบสอบถามให้เสร็จก่อน (รออีก ${Math.ceil(wait / 1000)} วินาที)`);
+      if (wait > 0) throw new BadRequestException(bi(`Finish the survey first (wait ${Math.ceil(wait / 1000)} more seconds)`, `ทำแบบสอบถามให้เสร็จก่อน (รออีก ${Math.ceil(wait / 1000)} วินาที)`));
       if (!s.completionCode || !sameCode(s.completionCode, code)) return { wrong: true as const, left: EXTERNAL_SURVEY_RULES.MAX_ATTEMPTS - start.failedAttempts - 1 };
       return { wrong: false as const, paid: await this.pay(tx, s, userId, {}) };
     });
     if (outcome.wrong) {
       await this.prisma.surveyStart.update({ where: { surveyId_userId: { surveyId: id, userId } }, data: { failedAttempts: { increment: 1 } } });
       throw new BadRequestException(outcome.left > 0
-        ? `รหัสยืนยันไม่ถูกต้อง ตรวจว่าส่งฟอร์มเรียบร้อยแล้ว (เหลืออีก ${outcome.left} ครั้ง)`
-        : 'รหัสยืนยันไม่ถูกต้อง และกรอกผิดครบจำนวนครั้งแล้ว');
+        ? bi(`Wrong confirmation code. Make sure you submitted the form (${outcome.left} tries left).`, `รหัสยืนยันไม่ถูกต้อง ตรวจว่าส่งฟอร์มเรียบร้อยแล้ว (เหลืออีก ${outcome.left} ครั้ง)`)
+        : bi('Wrong confirmation code, and no tries left', 'รหัสยืนยันไม่ถูกต้อง และกรอกผิดครบจำนวนครั้งแล้ว'));
     }
     return outcome.paid;
   }
 
   private async respondBlockedReason(db: Db, s: SurveyRow & { contributions: { key: string }[] }, userId: string): Promise<{ reason: string; conflict?: boolean } | null> {
-    if (s.ownerId === userId) return { reason: 'ตอบแบบสอบถามของตัวเองไม่ได้' };
-    if (await db.surveyResponse.findUnique({ where: { surveyId_userId: { surveyId: s.id, userId } } })) return { reason: 'คุณตอบแบบสอบถามนี้ไปแล้ว', conflict: true };
-    if (s.status === 'PENDING_REVIEW') return { reason: 'แบบสอบถามนี้ยังรอแอดมินตรวจ' };
-    if (s.status === 'CLOSED' || s.closesAt <= new Date() || s.responsesCount >= s.quota) return { reason: 'แบบสอบถามนี้ปิดรับแล้ว' };
-    if (s.contributions.some((c) => c.key === userId)) return { reason: 'ผู้ที่สนับสนุนแบบสอบถามนี้ตอบไม่ได้' };
-    if (s.mode === 'IN_APP' && !(await db.surveyQuestion.count({ where: { surveyId: s.id } }))) return { reason: 'แบบสอบถามนี้ยังไม่มีคำถาม (สร้างก่อนมีระบบคำถาม)' };
-    if (s.webhookSecret && !s.webhookConnectedAt) return { reason: 'ผู้โพสต์ยังเชื่อม Google Form กับ TEMBO ไม่เสร็จ' };
+    if (s.ownerId === userId) return { reason: bi('You cannot answer your own survey', 'ตอบแบบสอบถามของตัวเองไม่ได้') };
+    if (await db.surveyResponse.findUnique({ where: { surveyId_userId: { surveyId: s.id, userId } } })) return { reason: bi('You have already answered this survey', 'คุณตอบแบบสอบถามนี้ไปแล้ว'), conflict: true };
+    if (s.status === 'PENDING_REVIEW') return { reason: bi('This survey is waiting for admin review', 'แบบสอบถามนี้ยังรอแอดมินตรวจ') };
+    if (s.status === 'CLOSED' || s.closesAt <= new Date() || s.responsesCount >= s.quota) return { reason: bi('This survey is closed', 'แบบสอบถามนี้ปิดรับแล้ว') };
+    if (s.contributions.some((c) => c.key === userId)) return { reason: bi('Sponsors cannot answer the survey they sponsored', 'ผู้ที่สนับสนุนแบบสอบถามนี้ตอบไม่ได้') };
+    if (s.mode === 'IN_APP' && !(await db.surveyQuestion.count({ where: { surveyId: s.id } }))) return { reason: bi('This survey has no questions yet', 'แบบสอบถามนี้ยังไม่มีคำถาม (สร้างก่อนมีระบบคำถาม)') };
+    if (s.webhookSecret && !s.webhookConnectedAt) return { reason: bi('The owner has not finished connecting the Google Form to TEMBO yet', 'ผู้โพสต์ยังเชื่อม Google Form กับ TEMBO ไม่เสร็จ') };
     const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { cmuVerifiedAt: true, faculty: true, studyYear: true } });
-    if (!user.cmuVerifiedAt) return { reason: 'ต้องยืนยันอีเมล @cmu.ac.th ก่อนจึงจะรับ Coin ได้' };
-    if (s.eligibleFaculties.length && !(user.faculty && s.eligibleFaculties.includes(user.faculty))) return { reason: `เปิดให้เฉพาะคณะ${s.eligibleFaculties.join(', ')}` };
-    if (s.eligibleYears.length && !(user.studyYear && s.eligibleYears.includes(user.studyYear))) return { reason: `เปิดให้เฉพาะชั้นปีที่ ${s.eligibleYears.join(', ')}` };
-    if (s.rewardMode === 'EQUAL' && s.escrowWallet.balance < s.rewardPerResponse) return { reason: 'Coin รางวัลของแบบสอบถามนี้หมดแล้ว รอผู้โพสต์หรือเพื่อนเติม' };
+    if (!user.cmuVerifiedAt) return { reason: bi('Verify your @cmu.ac.th email to earn Coin', 'ต้องยืนยันอีเมล @cmu.ac.th ก่อนจึงจะรับ Coin ได้') };
+    if (s.eligibleFaculties.length && !(user.faculty && s.eligibleFaculties.includes(user.faculty))) return { reason: bi(`Open only to the Faculty of ${s.eligibleFaculties.map((f) => FACULTY_EN[f as keyof typeof FACULTY_EN] ?? f).join(', ')}`, `เปิดให้เฉพาะคณะ${s.eligibleFaculties.join(', ')}`) };
+    if (s.eligibleYears.length && !(user.studyYear && s.eligibleYears.includes(user.studyYear))) return { reason: bi(`Open only to year ${s.eligibleYears.join(', ')} students`, `เปิดให้เฉพาะชั้นปีที่ ${s.eligibleYears.join(', ')}`) };
+    if (s.rewardMode === 'EQUAL' && s.escrowWallet.balance < s.rewardPerResponse) return { reason: bi('This survey has run out of reward Coin. Wait for the owner or a friend to add more.', 'Coin รางวัลของแบบสอบถามนี้หมดแล้ว รอผู้โพสต์หรือเพื่อนเติม') };
     return null;
   }
 
@@ -372,8 +373,8 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   async closeByOwner(userId: string, id: string) {
     await this.prisma.$transaction(async (tx) => {
       const s = await this.lock(tx, id);
-      if (s.ownerId !== userId) throw new ForbiddenException('เฉพาะผู้โพสต์ที่ปิดแบบสอบถามได้');
-      if (s.status === 'CLOSED') throw new BadRequestException('แบบสอบถามนี้ปิดไปแล้ว');
+      if (s.ownerId !== userId) throw new ForbiddenException(bi('Only the owner can close this survey', 'เฉพาะผู้โพสต์ที่ปิดแบบสอบถามได้'));
+      if (s.status === 'CLOSED') throw new BadRequestException(bi('This survey is already closed', 'แบบสอบถามนี้ปิดไปแล้ว'));
       await this.closeLocked(tx, id);
     });
     return this.detail(id, userId);
@@ -412,7 +413,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
         credit.set(wid, (credit.get(wid) ?? 0) + shares[i]);
       });
       await this.ledger.post(tx, {
-        type: 'ESCROW_REFUND', idempotencyKey: `survey:${id}:refund`, memo: `คืน Coin จากแบบสอบถาม "${s.title}"`,
+        type: 'ESCROW_REFUND', idempotencyKey: `survey:${id}:refund`, memo: bi(`Coin refund from survey "${s.title}"`, `คืน Coin จากแบบสอบถาม "${s.title}"`),
         entries: [{ walletId: s.escrowWalletId, delta: -leftover }, ...[...credit].map(([walletId, delta]) => ({ walletId, delta }))],
       });
       for (const [i, c] of s.contributions.entries()) {
@@ -420,15 +421,18 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       }
     }
     await this.notifications.notify(tx, [s.ownerId], {
-      type: 'SURVEY_CLOSED', title: 'แบบสอบถามปิดรับแล้ว',
-      body: `"${s.title}" ได้ผู้ตอบ ${s.responsesCount}/${s.quota} คน${s.rewardMode === 'DRAW' ? ` · สุ่มผู้ได้รางวัลแล้ว ${winners} คน` : ''}${leftover > 0 ? ' · คืน Coin ที่เหลือตามสัดส่วนแล้ว' : ''}`, link: `/surveys/${id}/results`,
+      type: 'SURVEY_CLOSED', title: bi('Your survey has closed', 'แบบสอบถามปิดรับแล้ว'),
+      body: bi(
+        `"${s.title}" got ${s.responsesCount}/${s.quota} responses${s.rewardMode === 'DRAW' ? ` · ${winners} winner(s) drawn` : ''}${leftover > 0 ? ' · leftover Coin refunded' : ''}`,
+        `"${s.title}" ได้ผู้ตอบ ${s.responsesCount}/${s.quota} คน${s.rewardMode === 'DRAW' ? ` · สุ่มผู้ได้รางวัลแล้ว ${winners} คน` : ''}${leftover > 0 ? ' · คืน Coin ที่เหลือตามสัดส่วนแล้ว' : ''}`,
+      ), link: `/surveys/${id}/results`,
     });
     await tx.survey.update({
       where: { id },
       data: {
         status: 'CLOSED', closedAt: new Date(),
         ...(s.rewardMode === 'DRAW' ? { drawnAt: new Date() } : {}),
-        ...(s.subsidyStatus === 'PENDING' ? { subsidyStatus: 'REJECTED', subsidyAmount: 0, subsidyNote: 'ปิดแบบสอบถามก่อนแอดมินตรวจ' } : {}),
+        ...(s.subsidyStatus === 'PENDING' ? { subsidyStatus: 'REJECTED', subsidyAmount: 0, subsidyNote: bi('The survey closed before admin review', 'ปิดแบบสอบถามก่อนแอดมินตรวจ') } : {}),
       },
     });
   }
@@ -448,12 +452,12 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
     for (const [i, e] of picked.entries()) {
       const prize = s.prizes[i];
       await this.ledger.post(tx, {
-        type: 'SURVEY_REWARD', idempotencyKey: `survey:${s.id}:prize:${i + 1}`, memo: `รางวัลอันดับ ${i + 1} จากแบบสอบถาม "${s.title}"`,
+        type: 'SURVEY_REWARD', idempotencyKey: `survey:${s.id}:prize:${i + 1}`, memo: bi(`Prize #${i + 1} from survey "${s.title}"`, `รางวัลอันดับ ${i + 1} จากแบบสอบถาม "${s.title}"`),
         entries: [{ walletId: s.escrowWalletId, delta: -prize }, { walletId: wallets.find((w) => w.userId === e.userId)!.id, delta: prize }],
       });
       await tx.surveyResponse.update({ where: { id: e.id }, data: { reward: prize, prizeRank: i + 1 } });
       await this.notifications.notify(tx, [e.userId], {
-        type: 'SURVEY_PRIZE_WON', title: `ยินดีด้วย! ได้รางวัลอันดับ ${i + 1}`, body: `ได้รับ ${prize} Coin จาก "${s.title}"`, link: `/surveys/${s.id}`,
+        type: 'SURVEY_PRIZE_WON', title: bi(`Congratulations! You won prize #${i + 1}`, `ยินดีด้วย! ได้รางวัลอันดับ ${i + 1}`), body: bi(`You received ${prize} Coin from "${s.title}"`, `ได้รับ ${prize} Coin จาก "${s.title}"`), link: `/surveys/${s.id}`,
       });
     }
     return picked.length;
@@ -464,12 +468,15 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   /** สคริปต์ใน Google Form ส่งผลมาเมื่อมีคนกดส่ง (หรือ ping ตอนติดตั้ง) — ตอบ 200 เสมอเพื่อไม่ให้สคริปต์ส่งซ้ำ ยกเว้น secret ผิด */
   async formHook(id: string, input: FormHookInput) {
     const s = await this.prisma.survey.findUnique({ where: { id }, select: { id: true, title: true, ownerId: true, webhookSecret: true, webhookConnectedAt: true } });
-    if (!s?.webhookSecret || !sameSecret(s.webhookSecret, input.secret)) throw new ForbiddenException('secret ไม่ถูกต้อง');
+    if (!s?.webhookSecret || !sameSecret(s.webhookSecret, input.secret)) throw new ForbiddenException(bi('Invalid secret', 'secret ไม่ถูกต้อง'));
+    // ping ตอนติดตั้ง: สคริปต์เพิ่มคำถาม "รหัส TEMBO" ให้แล้ว และส่งลิงก์กรอกล่วงหน้ามาบอกว่าช่องรหัสคือ entry ไหน
+    const prefill = input.prefillUrl ? parseGoogleFormPrefill(input.prefillUrl) : null;
+    if (prefill) await this.prisma.survey.update({ where: { id }, data: { externalUrl: prefill.formUrl, codeEntryId: prefill.entryId } });
     if (!s.webhookConnectedAt) {
       const first = await this.prisma.survey.updateMany({ where: { id, webhookConnectedAt: null }, data: { webhookConnectedAt: new Date() } });
       if (first.count) {
         await this.notifications.notify(this.prisma, [s.ownerId], {
-          type: 'SURVEY_CONNECTED', title: 'เชื่อม Google Form สำเร็จ', body: `"${s.title}" เปิดให้ตอบแล้ว ระบบจะให้ Coin อัตโนมัติเมื่อมีคนส่งฟอร์ม`, link: `/surveys/${id}`,
+          type: 'SURVEY_CONNECTED', title: bi('Google Form connected', 'เชื่อม Google Form สำเร็จ'), body: bi(`"${s.title}" is now open. TEMBO will reward people automatically when they submit the form.`, `"${s.title}" เปิดให้ตอบแล้ว ระบบจะให้ Coin อัตโนมัติเมื่อมีคนส่งฟอร์ม`), link: `/surveys/${id}`,
         });
       }
     }
@@ -477,7 +484,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
 
     const codes = input.codes.filter((c) => TEMBO_CODE_RE.test(c));
     const start = codes.length ? await this.prisma.surveyStart.findFirst({ where: { surveyId: id, token: { in: codes } } }) : null;
-    if (!start) return { ok: false, reason: 'ไม่พบรหัส TEMBO ในคำตอบ' };
+    if (!start) return { ok: false, reason: 'No TEMBO code found in the response' };
 
     return this.prisma.$transaction(async (tx) => {
       const sv = await this.lock(tx, id);
@@ -487,8 +494,8 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       if (blocked) return { ok: false, reason: blocked.reason };
       const paid = await this.pay(tx, sv, start.userId, {});
       await this.notifications.notify(tx, [start.userId], paid.entered
-        ? { type: 'SURVEY_REWARDED', title: 'ได้สิทธิ์ลุ้นรางวัลแล้ว', body: `ส่ง "${sv.title}" เรียบร้อย ระบบจะสุ่มผู้ได้รางวัลตอนปิดแบบสอบถาม`, link: `/surveys/${id}` }
-        : { type: 'SURVEY_REWARDED', title: `ได้รับ ${paid.reward} Coin`, body: `ส่ง "${sv.title}" เรียบร้อย ขอบคุณที่ช่วยตอบ`, link: `/surveys/${id}` });
+        ? { type: 'SURVEY_REWARDED', title: bi('You are in the lucky draw', 'ได้สิทธิ์ลุ้นรางวัลแล้ว'), body: bi(`"${sv.title}" submitted. Winners are drawn when the survey closes.`, `ส่ง "${sv.title}" เรียบร้อย ระบบจะสุ่มผู้ได้รางวัลตอนปิดแบบสอบถาม`), link: `/surveys/${id}` }
+        : { type: 'SURVEY_REWARDED', title: bi(`You received ${paid.reward} Coin`, `ได้รับ ${paid.reward} Coin`), body: bi(`"${sv.title}" submitted. Thanks for helping!`, `ส่ง "${sv.title}" เรียบร้อย ขอบคุณที่ช่วยตอบ`), link: `/surveys/${id}` });
       return { ok: true };
     });
   }
@@ -544,7 +551,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   }
 
   async save(userId: string, id: string, on: boolean) {
-    if (!(await this.prisma.survey.findUnique({ where: { id }, select: { id: true } }))) throw new NotFoundException('ไม่พบแบบสอบถาม');
+    if (!(await this.prisma.survey.findUnique({ where: { id }, select: { id: true } }))) throw new NotFoundException(bi('Survey not found', 'ไม่พบแบบสอบถาม'));
     if (on) await this.prisma.surveySave.upsert({ where: { surveyId_userId: { surveyId: id, userId } }, create: { surveyId: id, userId }, update: {} });
     else await this.prisma.surveySave.deleteMany({ where: { surveyId: id, userId } });
     return { saved: on };
@@ -552,7 +559,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
 
   async detail(id: string, viewerId: string): Promise<SurveyDetail> {
     const s = await this.prisma.survey.findUnique({ where: { id }, include: { ...surveyInclude, contributions: true } });
-    if (!s) throw new NotFoundException('ไม่พบแบบสอบถาม');
+    if (!s) throw new NotFoundException(bi('Survey not found', 'ไม่พบแบบสอบถาม'));
     const sum = (k: string) => s.contributions.filter((c) => c.kind === k).reduce((t, c) => t + c.amount, 0);
     const sponsors = s.contributions.filter((c) => c.kind === 'SPONSOR');
     const mine = s.contributions.find((c) => c.key === viewerId);
@@ -604,8 +611,8 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   /** คำถามสำหรับทำแบบสอบถาม — เปิดให้ผู้โพสต์ (ดูตัวอย่าง) และผู้ที่ตอบได้เท่านั้น */
   async form(id: string, viewerId: string): Promise<SurveyForm> {
     const s = await this.prisma.survey.findUnique({ where: { id }, include: { ...surveyInclude, contributions: true, questions: { orderBy: { order: 'asc' } } } });
-    if (!s) throw new NotFoundException('ไม่พบแบบสอบถาม');
-    if (s.mode === 'EXTERNAL') throw new BadRequestException('แบบสอบถามนี้ใช้ลิงก์ภายนอก');
+    if (!s) throw new NotFoundException(bi('Survey not found', 'ไม่พบแบบสอบถาม'));
+    if (s.mode === 'EXTERNAL') throw new BadRequestException(bi('This survey uses an external link', 'แบบสอบถามนี้ใช้ลิงก์ภายนอก'));
     if (s.ownerId !== viewerId) {
       const blocked = await this.respondBlockedReason(this.prisma, s, viewerId);
       if (blocked) throw blocked.conflict ? new ConflictException(blocked.reason) : new ForbiddenException(blocked.reason);
@@ -621,8 +628,8 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
         responses: { orderBy: { createdAt: 'asc' }, include: { user: { select: { faculty: true, studyYear: true } } } },
       },
     });
-    if (!s) throw new NotFoundException('ไม่พบแบบสอบถาม');
-    if (s.ownerId !== viewer.id && viewer.role !== 'ADMIN') throw new ForbiddenException('เฉพาะผู้โพสต์ที่ดูผลได้');
+    if (!s) throw new NotFoundException(bi('Survey not found', 'ไม่พบแบบสอบถาม'));
+    if (s.ownerId !== viewer.id && viewer.role !== 'ADMIN') throw new ForbiddenException(bi('Only the owner can see the results', 'เฉพาะผู้โพสต์ที่ดูผลได้'));
     return s;
   }
 
@@ -648,7 +655,8 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       return { question, answered: vals.length, kind: 'text', samples: (vals as string[]).slice(-50).reverse() };
     });
     const fac = new Map<string, number>();
-    for (const r of s.responses) fac.set(r.user.faculty ?? 'ไม่ระบุ', (fac.get(r.user.faculty ?? 'ไม่ระบุ') ?? 0) + 1);
+    const unknown = bi('Not specified', 'ไม่ระบุ');
+    for (const r of s.responses) { const f = r.user.faculty ? facultyLabel(r.user.faculty) : unknown; fac.set(f, (fac.get(f) ?? 0) + 1); }
     return {
       id: s.id, title: s.title, responses: s.responses.length, questions,
       byFaculty: [...fac].map(([faculty, count]) => ({ faculty, count })).sort((a, b) => b.count - a.count),
@@ -656,18 +664,19 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** CSV สำหรับเปิดใน Excel (มี BOM ให้แสดงภาษาไทยถูกต้อง) */
-  async csv(id: string, viewer: { id: string; role: string }) {
+  async csv(id: string, viewer: { id: string; role: string }, lang: Lang = 'en') {
     const s = await this.ownedWithResponses(id, viewer);
     const esc = (v: unknown) => {
       const str = v === null || v === undefined ? '' : String(v);
       return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
     };
     const ext = s.mode === 'EXTERNAL';
-    const header = ['ลำดับ', 'เวลาที่ตอบ', 'คณะ', 'ชั้นปี', ...(ext ? ['รหัสอ้างอิง'] : []), ...s.questions.map((q, i) => `Q${i + 1}. ${q.title}`)];
+    const th = lang === 'th';
+    const header = [th ? 'ลำดับ' : 'No.', th ? 'เวลาที่ตอบ' : 'Answered at', th ? 'คณะ' : 'Faculty', th ? 'ชั้นปี' : 'Year', ...(ext ? [th ? 'รหัสอ้างอิง' : 'Reference code'] : []), ...s.questions.map((q, i) => `Q${i + 1}. ${q.title}`)];
     const rows = s.responses.map((r, i) => {
       const a = (r.answers ?? {}) as Answers;
       return [
-        i + 1, r.createdAt.toISOString(), r.user.faculty ?? '', r.user.studyYear ?? '', ...(ext ? [refCodeOf(s.id, r.userId)] : []),
+        i + 1, fmtDMYTime(r.createdAt), r.user.faculty ? pick(facultyLabel(r.user.faculty), lang) : '', r.user.studyYear ?? '', ...(ext ? [refCodeOf(s.id, r.userId)] : []),
         ...s.questions.map((q) => {
           const v = a[q.id];
           if (v === undefined) return '';

@@ -48,7 +48,7 @@ export async function ageOtps(prisma: PrismaService) {
 /** สมัคร/ล็อกอินครบ flow แล้วคืน agent ที่ถือ cookie */
 export async function login(app: INestApplication, prisma: PrismaService, mail: FakeMail, email: string, referralCode?: string) {
   await ageOtps(prisma);
-  const agent = request.agent(app.getHttpServer());
+  const agent = request.agent(app.getHttpServer()).set('Cookie', 'tembo_lang=th');
   await agent.post('/auth/otp/request').send({ email }).expect(200);
   const code = mail.lastCode(email)!;
   const res = await agent.post('/auth/otp/verify').send({ email, code, referralCode }).expect(200);
@@ -57,7 +57,8 @@ export async function login(app: INestApplication, prisma: PrismaService, mail: 
 
 let seq = 0;
 /** สร้างผู้ใช้ตรงในฐานข้อมูล (เร็วกว่า login) พร้อม Coin ตั้งต้น และ agent ที่ถือ access cookie */
-export async function makeUser(app: INestApplication, opts: { cmu?: boolean; balance?: number; role?: 'MEMBER' | 'ADMIN'; name?: string } = {}) {
+/** ผู้ใช้ทดสอบใช้ภาษาไทยเป็นค่าเริ่มต้น (ข้อความที่เทสต์ตรวจเป็นภาษาไทย) — ส่ง lang: 'en' เพื่อทดสอบภาษาอังกฤษ */
+export async function makeUser(app: INestApplication, opts: { cmu?: boolean; balance?: number; role?: 'MEMBER' | 'ADMIN'; name?: string; lang?: 'en' | 'th' } = {}) {
   const prisma = app.get(PrismaService);
   const n = ++seq;
   const user = await prisma.user.create({
@@ -78,7 +79,7 @@ export async function makeUser(app: INestApplication, opts: { cmu?: boolean; bal
     }));
   }
   const token = await app.get(JwtService).signAsync({ sub: user.id, role: user.role }, { expiresIn: 3600 });
-  const agent = request.agent(app.getHttpServer()).set('Cookie', `${ACCESS_COOKIE}=${token}`);
+  const agent = request.agent(app.getHttpServer()).set('Cookie', `${ACCESS_COOKIE}=${token}; tembo_lang=${opts.lang ?? 'th'}`);
   return { user, wallet, agent };
 }
 

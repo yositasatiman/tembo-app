@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { langMiddleware } from './common/i18n';
 import { config } from './config';
 
 export function configureApp(app: { use: (...a: any[]) => any; enableCors: (o: object) => void; getHttpAdapter?: () => { getInstance: () => any } }) {
@@ -11,6 +12,7 @@ export function configureApp(app: { use: (...a: any[]) => any; enableCors: (o: o
   if (config.trustProxy) app.getHttpAdapter?.().getInstance().set('trust proxy', true);
   app.use(helmet());
   app.use(cookieParser());
+  app.use(langMiddleware);
   app.enableCors({ origin: config.webOrigin, credentials: true });
 }
 

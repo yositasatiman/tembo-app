@@ -3,30 +3,32 @@ import { FormEvent, useEffect, useState } from 'react';
 import { AlertCircle, Check, Coins, Copy, ExternalLink, Link2, RefreshCw } from 'lucide-react';
 import type { ExternalStartResponse, SurveyDetail } from '@tembo/shared';
 import { post } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button, Card, inputCls, Modal, Progress } from '../ui';
 
 /** ผู้โพสต์: รหัสยืนยันที่ต้องใส่ในข้อความยืนยันของฟอร์ม */
 export function ExternalOwnerSetup({ s }: { s: SurveyDetail }) {
+  const { t } = useT();
   const [copied, setCopied] = useState(false);
-  const text = `รหัสยืนยัน TEMBO: ${s.completionCode}`;
+  const text = t(`TEMBO confirmation code: ${s.completionCode}`, `รหัสยืนยัน TEMBO: ${s.completionCode}`);
   return (
     <Card className="space-y-3">
-      <h3 className="flex items-center gap-2 font-extrabold"><Link2 className="size-4 text-primary" />ตั้งค่าฟอร์มของคุณ</h3>
+      <h3 className="flex items-center gap-2 font-extrabold"><Link2 className="size-4 text-primary" />{t('Set up your form', 'ตั้งค่าฟอร์มของคุณ')}</h3>
       <div className="flex items-center justify-between gap-3 rounded-2xl bg-lavender-soft p-4">
         <div>
-          <p className="text-xs text-muted-foreground">รหัสยืนยัน</p>
+          <p className="text-xs text-muted-foreground">{t('Confirmation code', 'รหัสยืนยัน')}</p>
           <p className="font-mono text-2xl font-extrabold tracking-[0.3em]">{s.completionCode}</p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={async () => { await navigator.clipboard.writeText(text).catch(() => undefined); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>
-          {copied ? <><Check />คัดลอกแล้ว</> : <><Copy />คัดลอก</>}
+          {copied ? <><Check />{t('Copied', 'คัดลอกแล้ว')}</> : <><Copy />{t('Copy', 'คัดลอก')}</>}
         </Button>
       </div>
       <ol className="list-decimal space-y-1 pl-5 text-sm">
-        <li>เปิด <a href={s.externalUrl ?? '#'} target="_blank" rel="noopener noreferrer" className="font-bold text-primary underline">ฟอร์มของคุณ</a> ในโหมดแก้ไข</li>
-        <li>Google Forms: <b>การตั้งค่า → การนำเสนอ → ข้อความยืนยัน</b> แล้ววาง “{text}”</li>
-        <li>(แนะนำ) เพิ่มคำถามสั้น “รหัสอ้างอิง TEMBO” เพื่อเทียบกับไฟล์ CSV ว่าใครตอบจริง</li>
+        <li>{t('Open ', 'เปิด ')}<a href={s.externalUrl ?? '#'} target="_blank" rel="noopener noreferrer" className="font-bold text-primary underline">{t('your form', 'ฟอร์มของคุณ')}</a>{t(' in edit mode', ' ในโหมดแก้ไข')}</li>
+        <li>{t('In Google Forms: ', 'Google Forms: ')}<b>{t('Settings → Presentation → Confirmation message', 'การตั้งค่า → การนำเสนอ → ข้อความยืนยัน')}</b>{t(', then paste ', ' แล้ววาง ')}“{text}”</li>
+        <li>{t('(Recommended) Add a short question “TEMBO reference code” so you can match answers with the CSV file', '(แนะนำ) เพิ่มคำถามสั้น “รหัสอ้างอิง TEMBO” เพื่อเทียบกับไฟล์ CSV ว่าใครตอบจริง')}</li>
       </ol>
-      <p className="text-xs text-muted-foreground">อย่าเผยแพร่รหัสนี้ที่อื่น ผู้ตอบจะเห็นรหัสหลังส่งฟอร์มเท่านั้น</p>
+      <p className="text-xs text-muted-foreground">{t('Do not share this code anywhere else. Participants only see it after submitting the form.', 'อย่าเผยแพร่รหัสนี้ที่อื่น ผู้ตอบจะเห็นรหัสหลังส่งฟอร์มเท่านั้น')}</p>
     </Card>
   );
 }
@@ -35,6 +37,7 @@ type Phase = 'idle' | 'checking' | 'error' | 'done';
 
 /** ผู้ตอบ: เปิดฟอร์มภายนอก → กลับมากรอกรหัสยืนยัน → รับ Coin (Figma: Submission verification) */
 export function ExternalRespond({ s, onDone }: { s: SurveyDetail; onDone: (reward: number) => void }) {
+  const { t } = useT();
   const [start, setStart] = useState<ExternalStartResponse | null>(s.myStart);
   const [code, setCode] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
@@ -65,59 +68,59 @@ export function ExternalRespond({ s, onDone }: { s: SurveyDetail; onDone: (rewar
     } catch (err) {
       await minDelay;
       setMessage((err as Error).message); setPhase('error');
-      setStart((st) => st && /รหัสยืนยันไม่ถูกต้อง/.test((err as Error).message) ? { ...st, attemptsLeft: Math.max(0, st.attemptsLeft - 1) } : st);
+      setStart((st) => st && /รหัสยืนยันไม่ถูกต้อง|Wrong confirmation code/.test((err as Error).message) ? { ...st, attemptsLeft: Math.max(0, st.attemptsLeft - 1) } : st);
     }
   }
 
   return (
     <Card className="space-y-4">
       <div>
-        <h3 className="font-extrabold">ตอบแบบสอบถาม</h3>
-        <p className="text-sm text-muted-foreground">{s.questionCount} ข้อ · ส่งฟอร์มแล้วกรอกรหัสยืนยันที่หน้าสุดท้าย รับ {s.rewardPerResponse} Coin</p>
+        <h3 className="font-extrabold">{t('Take the survey', 'ตอบแบบสอบถาม')}</h3>
+        <p className="text-sm text-muted-foreground">{t(`${s.questionCount} questions · submit the form, then enter the confirmation code from its last page to get ${s.rewardPerResponse} Coin`, `${s.questionCount} ข้อ · ส่งฟอร์มแล้วกรอกรหัสยืนยันที่หน้าสุดท้าย รับ ${s.rewardPerResponse} Coin`)}</p>
       </div>
-      <Step n={1} title="เปิดแบบสอบถามแล้วทำให้เสร็จ" done={!!start}>
-        <Button type="button" variant={start ? 'outline' : 'primary'} onClick={open}><ExternalLink />{start ? 'เปิดแบบสอบถามอีกครั้ง' : 'เปิดแบบสอบถาม'}</Button>
+      <Step n={1} title={t('Open the survey and finish it', 'เปิดแบบสอบถามแล้วทำให้เสร็จ')} done={!!start}>
+        <Button type="button" variant={start ? 'outline' : 'primary'} onClick={open}><ExternalLink />{start ? t('Open the survey again', 'เปิดแบบสอบถามอีกครั้ง') : t('Open the survey', 'เปิดแบบสอบถาม')}</Button>
         {start && (
           <p className="mt-2 text-xs text-muted-foreground">
-            รหัสอ้างอิงของคุณ <b className="font-mono text-sm text-indigo">{start.refCode}</b> — ถ้าฟอร์มมีช่อง “รหัสอ้างอิง TEMBO” ให้กรอกรหัสนี้
+            {t('Your reference code', 'รหัสอ้างอิงของคุณ')} <b className="font-mono text-sm text-indigo">{start.refCode}</b> — {t('if the form asks for a “TEMBO reference code”, enter this', 'ถ้าฟอร์มมีช่อง “รหัสอ้างอิง TEMBO” ให้กรอกรหัสนี้')}
           </p>
         )}
       </Step>
-      <Step n={2} title="กรอกรหัสยืนยันจากหน้าสุดท้ายของฟอร์ม" done={false}>
+      <Step n={2} title={t('Enter the confirmation code from the form’s last page', 'กรอกรหัสยืนยันจากหน้าสุดท้ายของฟอร์ม')} done={false}>
         <form onSubmit={verify} className="flex gap-2">
           <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12))}
-            disabled={!start || start.attemptsLeft === 0} aria-label="รหัสยืนยัน" placeholder="เช่น K7M2QX" autoComplete="off"
+            disabled={!start || start.attemptsLeft === 0} aria-label={t('Confirmation code', 'รหัสยืนยัน')} placeholder={t('e.g. K7M2QX', 'เช่น K7M2QX')} autoComplete="off"
             className={`${inputCls} font-mono tracking-widest uppercase`} />
-          <Button disabled={!start || code.length < 4 || wait > 0 || start.attemptsLeft === 0}>{wait > 0 ? `รอ ${wait} วิ` : 'ยืนยัน'}</Button>
+          <Button disabled={!start || code.length < 4 || wait > 0 || start.attemptsLeft === 0}>{wait > 0 ? t(`Wait ${wait}s`, `รอ ${wait} วิ`) : t('Confirm', 'ยืนยัน')}</Button>
         </form>
-        {start && start.attemptsLeft < 5 && <p className="mt-1 text-xs text-destructive">กรอกผิดได้อีก {start.attemptsLeft} ครั้ง</p>}
+        {start && start.attemptsLeft < 5 && <p className="mt-1 text-xs text-destructive">{t(`${start.attemptsLeft} tries left`, `กรอกผิดได้อีก ${start.attemptsLeft} ครั้ง`)}</p>}
       </Step>
 
       {phase === 'checking' && (
-        <Modal label="กำลังตรวจสอบ">
+        <Modal label={t('Checking', 'กำลังตรวจสอบ')}>
           <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-lavender text-primary"><RefreshCw className="size-7 animate-spin" /></span>
-          <p className="mt-4 text-xl font-extrabold">กำลังตรวจสอบการส่งแบบสอบถาม…</p>
-          <p className="mt-2 text-sm text-muted-foreground">รอสักครู่ TEMBO กำลังยืนยันคำตอบของคุณ</p>
+          <p className="mt-4 text-xl font-extrabold">{t('Checking your submission…', 'กำลังตรวจสอบการส่งแบบสอบถาม…')}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t('One moment, TEMBO is confirming your response.', 'รอสักครู่ TEMBO กำลังยืนยันคำตอบของคุณ')}</p>
           <Progress value={65} className="mt-5 animate-pulse" />
         </Modal>
       )}
       {phase === 'error' && (
-        <Modal label="ตรวจสอบไม่ผ่าน" onClose={() => setPhase('idle')}>
+        <Modal label={t('Unable to verify', 'ตรวจสอบไม่ผ่าน')} onClose={() => setPhase('idle')}>
           <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-destructive-soft text-destructive"><AlertCircle className="size-7" /></span>
-          <p className="mt-4 text-xl font-extrabold">ตรวจสอบไม่ผ่าน</p>
-          <p className="mt-2 text-sm text-muted-foreground">{message || 'ตรวจว่าส่งแบบสอบถามเรียบร้อยแล้ว'}</p>
+          <p className="mt-4 text-xl font-extrabold">{t('Unable to verify', 'ตรวจสอบไม่ผ่าน')}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{message || t('Make sure you submitted the survey.', 'ตรวจว่าส่งแบบสอบถามเรียบร้อยแล้ว')}</p>
           <div className="mt-5 grid grid-cols-2 gap-2">
-            <Button type="button" variant="outline" onClick={() => setPhase('idle')}>ลองอีกครั้ง</Button>
-            <Button type="button" onClick={() => { setPhase('idle'); open(); }}>กลับไปที่ฟอร์ม</Button>
+            <Button type="button" variant="outline" onClick={() => setPhase('idle')}>{t('Try again', 'ลองอีกครั้ง')}</Button>
+            <Button type="button" onClick={() => { setPhase('idle'); open(); }}>{t('Back to the form', 'กลับไปที่ฟอร์ม')}</Button>
           </div>
         </Modal>
       )}
       {phase === 'done' && (
-        <Modal label="ได้รับรางวัล" onClose={() => onDone(reward)}>
+        <Modal label={t('Reward received', 'ได้รับรางวัล')} onClose={() => onDone(reward)}>
           <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-coin-soft text-warning"><Coins className="size-7" /></span>
-          <p className="mt-4 text-xl font-extrabold">ได้รับ +{reward} Coin!</p>
-          <p className="mt-2 text-sm text-muted-foreground">ขอบคุณที่ช่วยงานวิจัยของเพื่อนชาว มช.</p>
-          <Button type="button" className="mt-5 w-full" onClick={() => onDone(reward)}>เยี่ยมเลย</Button>
+          <p className="mt-4 text-xl font-extrabold">{t(`You got +${reward} Coin!`, `ได้รับ +${reward} Coin!`)}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t('Thanks for helping a fellow CMU researcher!', 'ขอบคุณที่ช่วยงานวิจัยของเพื่อนชาว มช.')}</p>
+          <Button type="button" className="mt-5 w-full" onClick={() => onDone(reward)}>{t('Great!', 'เยี่ยมเลย')}</Button>
         </Modal>
       )}
     </Card>

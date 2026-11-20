@@ -34,6 +34,6 @@ describe('MailService ผ่าน MAIL_WEBHOOK_URL (Gmail Apps Script)', () => 
 
   it('ตัวส่งต่อตอบ ok:false → โยน error', async () => {
     reply = { ok: false } as never;
-    await expect(new MailService().send({ to: 'a@test.dev', subject: 'x', text: 'y' })).rejects.toThrow('ส่งอีเมลไม่สำเร็จ');
+    await expect(new MailService().send({ to: 'a@test.dev', subject: 'x', text: 'y' })).rejects.toThrow('Failed to send email');
   });
 });

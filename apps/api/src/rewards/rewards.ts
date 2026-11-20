@@ -4,8 +4,7 @@ import {
 import { Prisma, SYSTEM_WALLETS } from '@tembo/db';
 import {
   AdminRedemptionItem, DecideRedemptionInput, decideRedemptionSchema, RedemptionItem, REWARD_RULES, RewardItem,
-  rewardSchema, updateRewardSchema,
-} from '@tembo/shared';
+  rewardSchema, updateRewardSchema, bi } from '@tembo/shared';
 import type { z } from 'zod';
 import { AuthGuard, AuthUser, CurrentUser, Roles, RolesGuard } from '../common/auth';
 import { ZodPipe } from '../common/zod.pipe';
@@ -44,20 +43,20 @@ export class RewardsService {
   async redeem(userId: string, rewardId: string): Promise<RedemptionItem> {
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, include: { wallet: true } });
-      if (REWARD_RULES.REQUIRE_CMU && !user.cmuVerifiedAt) throw new ForbiddenException('ยืนยันอีเมล @cmu.ac.th ก่อนแลกของรางวัล');
-      if (!user.wallet) throw new BadRequestException('ไม่พบกระเป๋า Coin');
+      if (REWARD_RULES.REQUIRE_CMU && !user.cmuVerifiedAt) throw new ForbiddenException(bi('Verify your @cmu.ac.th email before redeeming rewards', 'ยืนยันอีเมล @cmu.ac.th ก่อนแลกของรางวัล'));
+      if (!user.wallet) throw new BadRequestException(bi('Coin wallet not found', 'ไม่พบกระเป๋า Coin'));
 
       // ล็อกแถวของรางวัล: กันแลกพร้อมกันจนสต็อกหรือโควตาต่อคนเกิน
       const [reward] = await tx.$queryRaw<{ id: string; title: string; cost: number; stock: number; perUserLimit: number; active: boolean }[]>`
         SELECT id, title, cost, stock, "perUserLimit", active FROM "Reward" WHERE id = ${rewardId} FOR UPDATE`;
-      if (!reward || !reward.active) throw new NotFoundException('ไม่พบของรางวัลนี้');
-      if (reward.stock <= 0) throw new BadRequestException('ของรางวัลนี้หมดแล้ว');
+      if (!reward || !reward.active) throw new NotFoundException(bi('Reward not found', 'ไม่พบของรางวัลนี้'));
+      if (reward.stock <= 0) throw new BadRequestException(bi('This reward is out of stock', 'ของรางวัลนี้หมดแล้ว'));
       const used = await tx.rewardRedemption.count({ where: { rewardId, userId, status: { not: 'CANCELLED' } } });
-      if (used >= reward.perUserLimit) throw new BadRequestException(`แลกของรางวัลนี้ได้สูงสุด ${reward.perUserLimit} ครั้งต่อคน`);
+      if (used >= reward.perUserLimit) throw new BadRequestException(bi(`You can redeem this reward up to ${reward.perUserLimit} time(s)`, `แลกของรางวัลนี้ได้สูงสุด ${reward.perUserLimit} ครั้งต่อคน`));
 
       const red = await tx.rewardRedemption.create({ data: { rewardId, userId, cost: reward.cost }, include: { reward: true } });
       await this.ledger.post(tx, {
-        type: 'REWARD_REDEEM', idempotencyKey: `reward:redeem:${red.id}`, memo: `แลก ${reward.title}`,
+        type: 'REWARD_REDEEM', idempotencyKey: `reward:redeem:${red.id}`, memo: bi(`Redeemed ${reward.title}`, `แลก ${reward.title}`),
         entries: [{ walletId: user.wallet.id, delta: -reward.cost }, { walletId: SYSTEM_WALLETS.BURN, delta: reward.cost }],
       });
       await tx.reward.update({ where: { id: rewardId }, data: { stock: { decrement: 1 } } });
@@ -69,7 +68,7 @@ export class RewardsService {
   async cancelByUser(userId: string, id: string) {
     return this.prisma.$transaction(async (tx) => {
       const red = await this.lockPending(tx, id);
-      if (red.userId !== userId) throw new NotFoundException('ไม่พบรายการนี้');
+      if (red.userId !== userId) throw new NotFoundException(bi('Item not found', 'ไม่พบรายการนี้'));
       return this.toRedemption(await this.cancel(tx, red, null, false));
     });
   }
@@ -91,7 +90,7 @@ export class RewardsService {
 
   async update(id: string, d: z.output<typeof updateRewardSchema>) {
     const r = await this.prisma.reward.update({ where: { id }, data: d }).catch((e) => {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') throw new NotFoundException('ไม่พบของรางวัลนี้');
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') throw new NotFoundException(bi('Reward not found', 'ไม่พบของรางวัลนี้'));
       throw e;
     });
     return this.toItem(r, 0);
@@ -113,7 +112,7 @@ export class RewardsService {
       if (input.action === 'CANCEL') return this.toRedemption(await this.cancel(tx, red, note, true));
       const done = await tx.rewardRedemption.update({ where: { id }, data: { status: 'FULFILLED', note, decidedAt: new Date() }, include: { reward: true } });
       await this.notifications.notify(tx, [red.userId], {
-        type: 'REWARD_FULFILLED', title: `ส่งมอบ “${red.reward.title}” แล้ว`, body: note ?? 'แอดมินยืนยันการส่งมอบของรางวัลแล้ว', link: '/rewards?tab=mine',
+        type: 'REWARD_FULFILLED', title: bi(`“${red.reward.title}” has been handed over`, `ส่งมอบ “${red.reward.title}” แล้ว`), body: note ?? bi('An admin confirmed your reward was handed over', 'แอดมินยืนยันการส่งมอบของรางวัลแล้ว'), link: '/rewards?tab=mine',
       });
       return this.toRedemption(done);
     });
@@ -123,22 +122,22 @@ export class RewardsService {
 
   private async lockPending(tx: Tx, id: string) {
     const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "RewardRedemption" WHERE id = ${id} FOR UPDATE`;
-    if (!locked.length) throw new NotFoundException('ไม่พบรายการนี้');
+    if (!locked.length) throw new NotFoundException(bi('Item not found', 'ไม่พบรายการนี้'));
     const red = await tx.rewardRedemption.findUniqueOrThrow({ where: { id }, include: { reward: true, user: { include: { wallet: true } } } });
-    if (red.status !== 'PENDING') throw new BadRequestException('รายการนี้ดำเนินการไปแล้ว');
+    if (red.status !== 'PENDING') throw new BadRequestException(bi('This item has already been processed', 'รายการนี้ดำเนินการไปแล้ว'));
     return red;
   }
 
   private async cancel(tx: Tx, red: Awaited<ReturnType<RewardsService['lockPending']>>, note: string | null, byAdmin: boolean) {
     await this.ledger.post(tx, {
-      type: 'REWARD_REFUND', idempotencyKey: `reward:refund:${red.id}`, memo: `คืน Coin: ${red.reward.title}`,
+      type: 'REWARD_REFUND', idempotencyKey: `reward:refund:${red.id}`, memo: bi(`Coin refund: ${red.reward.title}`, `คืน Coin: ${red.reward.title}`),
       entries: [{ walletId: SYSTEM_WALLETS.BURN, delta: -red.cost }, { walletId: red.user.wallet!.id, delta: red.cost }],
     });
     await tx.reward.update({ where: { id: red.rewardId }, data: { stock: { increment: 1 } } });
     const done = await tx.rewardRedemption.update({ where: { id: red.id }, data: { status: 'CANCELLED', note, decidedAt: new Date() }, include: { reward: true } });
     if (byAdmin) {
       await this.notifications.notify(tx, [red.userId], {
-        type: 'REWARD_CANCELLED', title: `ยกเลิกการแลก “${red.reward.title}”`, body: `${note ?? ''} · คืน ${red.cost} Coin แล้ว`.replace(/^ · /, ''), link: '/rewards?tab=mine',
+        type: 'REWARD_CANCELLED', title: bi(`Redemption of “${red.reward.title}” cancelled`, `ยกเลิกการแลก “${red.reward.title}”`), body: bi(`${note ? `${note} · ` : ''}${red.cost} Coin refunded`, `${note ? `${note} · ` : ''}คืน ${red.cost} Coin แล้ว`), link: '/rewards?tab=mine',
       });
     }
     return done;

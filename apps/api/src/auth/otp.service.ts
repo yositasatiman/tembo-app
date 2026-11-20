@@ -1,13 +1,15 @@
 import { BadRequestException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { createHmac, randomInt, timingSafeEqual } from 'crypto';
 import { OtpPurpose } from '@tembo/db';
+import { bi, pick } from '@tembo/shared';
+import { currentLang } from '../common/i18n';
 import { config } from '../config';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const SUBJECT: Record<OtpPurpose, string> = {
-  LOGIN: 'รหัสเข้าสู่ระบบ TEMBO',
-  VERIFY_CMU: 'รหัสยืนยันอีเมล CMU สำหรับ TEMBO',
+  LOGIN: bi('Your TEMBO login code', 'รหัสเข้าสู่ระบบ TEMBO'),
+  VERIFY_CMU: bi('Your TEMBO CMU email verification code', 'รหัสยืนยันอีเมล CMU สำหรับ TEMBO'),
 };
 
 @Injectable()
@@ -27,10 +29,10 @@ export class OtpService {
       select: { createdAt: true },
     });
     if (recent[0] && now - recent[0].createdAt.getTime() < config.otp.resendCooldownSec * 1000) {
-      throw new HttpException(`กรุณารอ ${config.otp.resendCooldownSec} วินาทีก่อนขอรหัสใหม่`, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(bi(`Please wait ${config.otp.resendCooldownSec} seconds before requesting a new code`, `กรุณารอ ${config.otp.resendCooldownSec} วินาทีก่อนขอรหัสใหม่`), HttpStatus.TOO_MANY_REQUESTS);
     }
     if (recent.length >= config.otp.maxPerHour) {
-      throw new HttpException('ขอรหัสบ่อยเกินไป กรุณาลองใหม่ภายหลัง', HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(bi('Too many code requests. Please try again later.', 'ขอรหัสบ่อยเกินไป กรุณาลองใหม่ภายหลัง'), HttpStatus.TOO_MANY_REQUESTS);
     }
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
     await this.prisma.emailOtp.create({
@@ -38,8 +40,11 @@ export class OtpService {
     });
     await this.mail.send({
       to: email,
-      subject: SUBJECT[purpose],
-      text: `รหัสของคุณคือ ${code} (ใช้ได้ ${config.otp.ttlMin} นาที) หากคุณไม่ได้ขอรหัสนี้ ไม่ต้องทำอะไร`,
+      subject: pick(SUBJECT[purpose], currentLang()),
+      text: pick(bi(
+        `Your code is ${code} (valid for ${config.otp.ttlMin} minutes). If you did not request this code, you can ignore this email.`,
+        `รหัสของคุณคือ ${code} (ใช้ได้ ${config.otp.ttlMin} นาที) หากคุณไม่ได้ขอรหัสนี้ ไม่ต้องทำอะไร`,
+      ), currentLang()),
     });
   }
 
@@ -49,9 +54,9 @@ export class OtpService {
       where: { purpose, consumedAt: null, ...where },
       orderBy: { createdAt: 'desc' },
     });
-    const invalid = new BadRequestException('รหัสไม่ถูกต้องหรือหมดอายุ');
+    const invalid = new BadRequestException(bi('The code is incorrect or has expired', 'รหัสไม่ถูกต้องหรือหมดอายุ'));
     if (!otp || otp.expiresAt.getTime() < Date.now()) throw invalid;
-    if (otp.attempts >= config.otp.maxAttempts) throw new BadRequestException('ใส่รหัสผิดเกินกำหนด กรุณาขอรหัสใหม่');
+    if (otp.attempts >= config.otp.maxAttempts) throw new BadRequestException(bi('Too many wrong attempts. Please request a new code.', 'ใส่รหัสผิดเกินกำหนด กรุณาขอรหัสใหม่'));
 
     const a = Buffer.from(this.hash(purpose, otp.email, code), 'hex');
     const b = Buffer.from(otp.codeHash, 'hex');

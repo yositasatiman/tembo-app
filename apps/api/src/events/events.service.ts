@@ -8,6 +8,7 @@ import {
   CheckInCodeResponse, CheckInResponse, CreateEventInput, EVENT_RULES, EventAttendee, EventDetail,
   EventFilter, EventSummary, quoteEvent,
 } from '@tembo/shared';
+import { bi, pick } from '@tembo/shared';
 import type { AuthUser } from '../common/auth';
 import { config } from '../config';
 import { LedgerService, Tx } from '../ledger/ledger.service';
@@ -85,7 +86,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
       await this.ledger.post(tx, {
         type: 'ESCROW_FUND', idempotencyKey: `event:${event.id}:fund`,
-        memo: `ค่าโพสต์${q.rewardPool ? ' + Coin รางวัล' : ''} Event "${event.title}" (พักไว้รอแอดมินตรวจ)`,
+        memo: bi(`Posting fee${q.rewardPool ? ' + reward Coin' : ''} for event "${event.title}" (held until admin review)`, `ค่าโพสต์${q.rewardPool ? ' + Coin รางวัล' : ''} กิจกรรม "${event.title}" (พักไว้รอแอดมินตรวจ)`),
         entries: [{ walletId: wallet.id, delta: -q.total }, { walletId: escrow.id, delta: q.total }],
       });
       return event.id;
@@ -97,7 +98,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
 
   private async lock(tx: Tx, id: string) {
     const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Event" WHERE id = ${id} FOR UPDATE`;
-    if (!rows.length) throw new NotFoundException('ไม่พบ Event');
+    if (!rows.length) throw new NotFoundException(bi('Event not found', 'ไม่พบ กิจกรรม'));
     return tx.event.findUniqueOrThrow({ where: { id }, include: { escrowWallet: { select: { balance: true } } } });
   }
 
@@ -107,7 +108,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
     if (escrow.balance <= 0) return 0;
     const owner = await tx.wallet.findUniqueOrThrow({ where: { userId: e.organizerId } });
     await this.ledger.post(tx, {
-      type: 'ESCROW_REFUND', idempotencyKey: `event:${e.id}:refund`, memo: `คืน Coin จาก Event "${e.title}" (${reason})`,
+      type: 'ESCROW_REFUND', idempotencyKey: `event:${e.id}:refund`, memo: bi(`Coin refund from event "${e.title}" (${pick(reason, 'en')})`, `คืน Coin จากกิจกรรม "${e.title}" (${pick(reason, 'th')})`),
       entries: [{ walletId: e.escrowWalletId, delta: -escrow.balance }, { walletId: owner.id, delta: escrow.balance }],
     });
     return escrow.balance;
@@ -131,23 +132,23 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
   async review(adminId: string, id: string, approve: boolean, note?: string) {
     await this.prisma.$transaction(async (tx) => {
       const e = await this.lock(tx, id);
-      if (e.status !== 'PENDING_REVIEW') throw new ConflictException('Event นี้ไม่ได้รอการตรวจ');
+      if (e.status !== 'PENDING_REVIEW') throw new ConflictException(bi('This event is not waiting for review', 'กิจกรรมนี้ไม่ได้รอการตรวจ'));
       if (approve) {
-        if (e.endsAt <= new Date()) throw new BadRequestException('Event นี้จบไปแล้ว อนุมัติไม่ได้');
+        if (e.endsAt <= new Date()) throw new BadRequestException(bi('This event has already ended and cannot be approved', 'กิจกรรมนี้จบไปแล้ว อนุมัติไม่ได้'));
         await this.ledger.post(tx, {
-          type: 'POST_FEE', idempotencyKey: `event:${id}:fee`, memo: `ค่าโพสต์ Event "${e.title}"`,
+          type: 'POST_FEE', idempotencyKey: `event:${id}:fee`, memo: bi(`Posting fee for event "${e.title}"`, `ค่าโพสต์ กิจกรรม "${e.title}"`),
           entries: [{ walletId: e.escrowWalletId, delta: -e.postFee }, { walletId: SYSTEM_WALLETS.BURN, delta: e.postFee }],
         });
       } else {
-        await this.refundEscrow(tx, e, 'แอดมินไม่อนุมัติ');
+        await this.refundEscrow(tx, e, bi('not approved by admin', 'แอดมินไม่อนุมัติ'));
       }
       await tx.event.update({
         where: { id },
         data: { status: approve ? 'PUBLISHED' : 'REJECTED', reviewNote: note || null, reviewedAt: new Date() },
       });
       await this.notifications.notify(tx, [e.organizerId], approve
-        ? { type: 'EVENT_APPROVED', title: 'Event ผ่านการตรวจแล้ว', body: `"${e.title}" ขึ้นฟีดแล้ว`, link: `/events/${id}` }
-        : { type: 'EVENT_REJECTED', title: 'Event ไม่ผ่านการตรวจ', body: `"${e.title}"${note ? ` — ${note}` : ''} · คืน Coin ทั้งหมดแล้ว`, link: `/events/${id}` });
+        ? { type: 'EVENT_APPROVED', title: bi('Your event was approved', 'กิจกรรม ผ่านการตรวจแล้ว'), body: bi(`"${e.title}" is now in the feed`, `"${e.title}" ขึ้นฟีดแล้ว`), link: `/events/${id}` }
+        : { type: 'EVENT_REJECTED', title: bi('Your event was not approved', 'กิจกรรม ไม่ผ่านการตรวจ'), body: bi(`"${e.title}"${note ? ` — ${note}` : ''} · all Coin refunded`, `"${e.title}"${note ? ` — ${note}` : ''} · คืน Coin ทั้งหมดแล้ว`), link: `/events/${id}` });
       this.log.log(`event ${approve ? 'approved' : 'rejected'} event=${id} by admin=${adminId}`);
     });
   }
@@ -157,14 +158,14 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
   async cancelByOrganizer(userId: string, id: string) {
     await this.prisma.$transaction(async (tx) => {
       const e = await this.lock(tx, id);
-      if (e.organizerId !== userId) throw new ForbiddenException('เฉพาะผู้จัดที่ยกเลิก Event ได้');
-      if (e.status !== 'PENDING_REVIEW' && e.status !== 'PUBLISHED') throw new BadRequestException('Event นี้ยกเลิกไม่ได้แล้ว');
+      if (e.organizerId !== userId) throw new ForbiddenException(bi('Only the organizer can cancel this event', 'เฉพาะผู้จัดที่ยกเลิก กิจกรรม ได้'));
+      if (e.status !== 'PENDING_REVIEW' && e.status !== 'PUBLISHED') throw new BadRequestException(bi('This event can no longer be cancelled', 'กิจกรรมนี้ยกเลิกไม่ได้แล้ว'));
       // ยกเลิกก่อนแอดมินตรวจ = ค่าโพสต์ยังอยู่ใน Escrow → คืนทั้งหมด / หลังอนุมัติ ค่าโพสต์ไม่คืน
-      await this.refundEscrow(tx, e, 'ผู้จัดยกเลิก');
+      await this.refundEscrow(tx, e, bi('cancelled by organizer', 'ผู้จัดยกเลิก'));
       await tx.event.update({ where: { id }, data: { status: 'CANCELLED', cancelledAt: new Date() } });
       const regs = await tx.eventRegistration.findMany({ where: { eventId: id, status: { not: 'CANCELLED' } }, select: { userId: true } });
       await this.notifications.notify(tx, regs.map((r) => r.userId),
-        { type: 'EVENT_CANCELLED', title: 'Event ถูกยกเลิก', body: `ผู้จัดยกเลิก "${e.title}" แล้ว`, link: `/events/${id}` });
+        { type: 'EVENT_CANCELLED', title: bi('Event cancelled', 'กิจกรรม ถูกยกเลิก'), body: bi(`The organizer cancelled "${e.title}"`, `ผู้จัดยกเลิก "${e.title}" แล้ว`), link: `/events/${id}` });
     });
     return this.detail(id, { id: userId, role: 'MEMBER' });
   }
@@ -184,13 +185,13 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       await this.prisma.$transaction(async (tx) => {
         const e = await this.lock(tx, id);
         if (e.status === 'PUBLISHED' && e.endsAt <= closeBefore) {
-          await this.refundEscrow(tx, e, 'จบงาน');
+          await this.refundEscrow(tx, e, bi('event ended', 'จบงาน'));
           await tx.event.update({ where: { id }, data: { status: 'ENDED', endedAt: now } });
         } else if (e.status === 'PENDING_REVIEW' && e.startsAt <= now) {
-          await this.refundEscrow(tx, e, 'ถึงเวลาเริ่มก่อนแอดมินตรวจ');
-          await tx.event.update({ where: { id }, data: { status: 'REJECTED', reviewNote: 'ถึงเวลาเริ่มงานก่อนแอดมินตรวจ', reviewedAt: now } });
+          await this.refundEscrow(tx, e, bi('started before admin review', 'ถึงเวลาเริ่มก่อนแอดมินตรวจ'));
+          await tx.event.update({ where: { id }, data: { status: 'REJECTED', reviewNote: bi('The event started before an admin reviewed it', 'ถึงเวลาเริ่มงานก่อนแอดมินตรวจ'), reviewedAt: now } });
           await this.notifications.notify(tx, [e.organizerId],
-            { type: 'EVENT_REJECTED', title: 'Event หมดเวลาก่อนแอดมินตรวจ', body: `"${e.title}" · คืน Coin ทั้งหมดแล้ว`, link: `/events/${id}` });
+            { type: 'EVENT_REJECTED', title: bi('Event expired before review', 'กิจกรรม หมดเวลาก่อนแอดมินตรวจ'), body: bi(`"${e.title}" · all Coin refunded`, `"${e.title}" · คืน Coin ทั้งหมดแล้ว`), link: `/events/${id}` });
         }
       });
     }
@@ -200,10 +201,10 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
   // ───────────── ลงทะเบียน ─────────────
 
   private registerBlockedReason(e: { status: string; endsAt: Date; organizerId: string }, userId: string) {
-    if (e.organizerId === userId) return 'คุณเป็นผู้จัด Event นี้';
-    if (e.status === 'PENDING_REVIEW') return 'Event นี้ยังรอแอดมินตรวจ';
-    if (e.status === 'CANCELLED') return 'Event นี้ถูกยกเลิกแล้ว';
-    if (e.status !== 'PUBLISHED' || e.endsAt <= new Date()) return 'Event นี้จบไปแล้ว';
+    if (e.organizerId === userId) return bi('You are the organizer of this event', 'คุณเป็นผู้จัด กิจกรรมนี้');
+    if (e.status === 'PENDING_REVIEW') return bi('This event is waiting for admin review', 'กิจกรรมนี้ยังรอแอดมินตรวจ');
+    if (e.status === 'CANCELLED') return bi('This event was cancelled', 'กิจกรรมนี้ถูกยกเลิกแล้ว');
+    if (e.status !== 'PUBLISHED' || e.endsAt <= new Date()) return bi('This event has ended', 'กิจกรรมนี้จบไปแล้ว');
     return null;
   }
 
@@ -211,11 +212,11 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.$transaction(async (tx) => {
       const e = await this.lock(tx, id);
       // Event ที่ยังไม่ผ่านการตรวจ คนอื่นมองไม่เห็น
-      if ((e.status === 'PENDING_REVIEW' || e.status === 'REJECTED') && e.organizerId !== userId) throw new NotFoundException('ไม่พบ Event');
+      if ((e.status === 'PENDING_REVIEW' || e.status === 'REJECTED') && e.organizerId !== userId) throw new NotFoundException(bi('Event not found', 'ไม่พบ กิจกรรม'));
       const blocked = this.registerBlockedReason(e, userId);
       if (blocked) throw new BadRequestException(blocked);
       const existing = await tx.eventRegistration.findUnique({ where: { eventId_userId: { eventId: id, userId } } });
-      if (existing && existing.status !== 'CANCELLED') throw new ConflictException('คุณลงทะเบียน Event นี้แล้ว');
+      if (existing && existing.status !== 'CANCELLED') throw new ConflictException(bi('You are already registered for this event', 'คุณลงทะเบียน กิจกรรมนี้แล้ว'));
       const full = e.capacity !== null && e.registeredCount >= e.capacity;
       const status = full ? 'WAITLISTED' : 'REGISTERED';
       if (existing) {
@@ -235,8 +236,8 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
     await this.prisma.$transaction(async (tx) => {
       const e = await this.lock(tx, id);
       const reg = await tx.eventRegistration.findUnique({ where: { eventId_userId: { eventId: id, userId } } });
-      if (!reg || reg.status === 'CANCELLED') throw new BadRequestException('คุณยังไม่ได้ลงทะเบียน Event นี้');
-      if (reg.checkedInAt) throw new BadRequestException('เช็กอินแล้ว ยกเลิกการลงทะเบียนไม่ได้');
+      if (!reg || reg.status === 'CANCELLED') throw new BadRequestException(bi('You are not registered for this event', 'คุณยังไม่ได้ลงทะเบียน กิจกรรมนี้'));
+      if (reg.checkedInAt) throw new BadRequestException(bi('You have checked in, so you cannot cancel your registration', 'เช็กอินแล้ว ยกเลิกการลงทะเบียนไม่ได้'));
       await tx.eventRegistration.update({ where: { id: reg.id }, data: { status: 'CANCELLED' } });
       if (reg.status !== 'REGISTERED') return;
       // ที่ว่าง 1 ที่ → เลื่อนคนแรกในคิวขึ้นมา (ถ้า Event ยังเปิดอยู่)
@@ -246,7 +247,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       if (next) {
         await tx.eventRegistration.update({ where: { id: next.id }, data: { status: 'REGISTERED' } });
         await this.notifications.notify(tx, [next.userId],
-          { type: 'WAITLIST_PROMOTED', title: 'ได้ที่นั่งแล้ว!', body: `คุณเลื่อนจากคิวรอเป็นผู้ลงทะเบียน "${e.title}"`, link: `/events/${id}` });
+          { type: 'WAITLIST_PROMOTED', title: bi('You got a spot!', 'ได้ที่นั่งแล้ว!'), body: bi(`You moved from the waitlist to registered for "${e.title}"`, `คุณเลื่อนจากคิวรอเป็นผู้ลงทะเบียน "${e.title}"`), link: `/events/${id}` });
       }
       else await tx.event.update({ where: { id }, data: { registeredCount: { decrement: 1 } } });
     });
@@ -255,9 +256,9 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
 
   async hide(userId: string, id: string) {
     const e = await this.prisma.event.findUnique({ where: { id }, select: { organizerId: true } });
-    if (!e) throw new NotFoundException('ไม่พบ Event');
+    if (!e) throw new NotFoundException(bi('Event not found', 'ไม่พบ กิจกรรม'));
     const reg = await this.prisma.eventRegistration.findUnique({ where: { eventId_userId: { eventId: id, userId } } });
-    if (reg && reg.status !== 'CANCELLED') throw new BadRequestException('ยกเลิกการลงทะเบียนก่อน จึงจะซ่อน Event นี้ได้');
+    if (reg && reg.status !== 'CANCELLED') throw new BadRequestException(bi('Cancel your registration before hiding this event', 'ยกเลิกการลงทะเบียนก่อน จึงจะซ่อน กิจกรรมนี้ได้'));
     await this.prisma.eventHide.upsert({ where: { eventId_userId: { eventId: id, userId } }, create: { eventId: id, userId }, update: {} });
     return { ok: true };
   }
@@ -281,13 +282,13 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
   /** รหัสปัจจุบันสำหรับผู้จัดเปิดเป็น QR ที่หน้างาน */
   async checkInCode(userId: string, id: string): Promise<CheckInCodeResponse> {
     const e = await this.prisma.event.findUnique({ where: { id } });
-    if (!e) throw new NotFoundException('ไม่พบ Event');
-    if (e.organizerId !== userId) throw new ForbiddenException('เฉพาะผู้จัดที่เปิดรหัสเช็กอินได้');
-    if (e.status !== 'PUBLISHED') throw new BadRequestException('Event นี้ไม่ได้เปิดอยู่');
+    if (!e) throw new NotFoundException(bi('Event not found', 'ไม่พบ กิจกรรม'));
+    if (e.organizerId !== userId) throw new ForbiddenException(bi('Only the organizer can open the check-in code', 'เฉพาะผู้จัดที่เปิดรหัสเช็กอินได้'));
+    if (e.status !== 'PUBLISHED') throw new BadRequestException(bi('This event is not open', 'กิจกรรมนี้ไม่ได้เปิดอยู่'));
     const w = checkInWindow(e);
     const now = Date.now();
-    if (now < w.opensAt.getTime()) throw new BadRequestException(`เปิดเช็กอินได้ตั้งแต่ ${EVENT_RULES.CHECKIN_OPENS_BEFORE_MIN} นาทีก่อนเริ่มงาน`);
-    if (now > w.closesAt.getTime()) throw new BadRequestException('หมดช่วงเช็กอินแล้ว');
+    if (now < w.opensAt.getTime()) throw new BadRequestException(bi(`Check-in opens ${EVENT_RULES.CHECKIN_OPENS_BEFORE_MIN} minutes before the event starts`, `เปิดเช็กอินได้ตั้งแต่ ${EVENT_RULES.CHECKIN_OPENS_BEFORE_MIN} นาทีก่อนเริ่มงาน`));
+    if (now > w.closesAt.getTime()) throw new BadRequestException(bi('Check-in has closed', 'หมดช่วงเช็กอินแล้ว'));
     const s = this.slot(now);
     const code = this.codeFor(e.checkInSecret, e.id, s);
     const period = EVENT_RULES.CHECKIN_CODE_SECONDS;
@@ -310,27 +311,27 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
   async checkIn(userId: string, id: string, code: string): Promise<CheckInResponse> {
     return this.prisma.$transaction(async (tx) => {
       const e = await this.lock(tx, id);
-      if (e.status !== 'PUBLISHED') throw new BadRequestException('Event นี้ไม่ได้เปิดอยู่');
+      if (e.status !== 'PUBLISHED') throw new BadRequestException(bi('This event is not open', 'กิจกรรมนี้ไม่ได้เปิดอยู่'));
       const w = checkInWindow(e);
       const now = new Date();
-      if (now < w.opensAt) throw new BadRequestException('ยังไม่ถึงเวลาเช็กอิน');
-      if (now > w.closesAt) throw new BadRequestException('หมดช่วงเช็กอินแล้ว');
-      if (!this.codeMatches(e.checkInSecret, e.id, code)) throw new BadRequestException('รหัสเช็กอินไม่ถูกต้องหรือหมดอายุ ให้สแกน QR ใหม่อีกครั้ง');
+      if (now < w.opensAt) throw new BadRequestException(bi('Check-in has not opened yet', 'ยังไม่ถึงเวลาเช็กอิน'));
+      if (now > w.closesAt) throw new BadRequestException(bi('Check-in has closed', 'หมดช่วงเช็กอินแล้ว'));
+      if (!this.codeMatches(e.checkInSecret, e.id, code)) throw new BadRequestException(bi('The check-in code is invalid or expired. Please scan the QR again.', 'รหัสเช็กอินไม่ถูกต้องหรือหมดอายุ ให้สแกน QR ใหม่อีกครั้ง'));
       const reg = await tx.eventRegistration.findUnique({ where: { eventId_userId: { eventId: id, userId } } });
-      if (!reg || reg.status === 'CANCELLED') throw new BadRequestException('คุณยังไม่ได้ลงทะเบียน Event นี้');
-      if (reg.status === 'WAITLISTED') throw new BadRequestException('คุณยังอยู่ในคิวรอ ยังเช็กอินไม่ได้');
-      if (reg.checkedInAt) throw new ConflictException('คุณเช็กอินไปแล้ว');
+      if (!reg || reg.status === 'CANCELLED') throw new BadRequestException(bi('You are not registered for this event', 'คุณยังไม่ได้ลงทะเบียน กิจกรรมนี้'));
+      if (reg.status === 'WAITLISTED') throw new BadRequestException(bi('You are still on the waitlist and cannot check in yet', 'คุณยังอยู่ในคิวรอ ยังเช็กอินไม่ได้'));
+      if (reg.checkedInAt) throw new ConflictException(bi('You have already checked in', 'คุณเช็กอินไปแล้ว'));
 
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
       let reward = 0;
       let note: string | null = null;
       if (e.rewardPerCheckIn > 0) {
         const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { cmuVerifiedAt: true } });
-        if (!user.cmuVerifiedAt) note = 'เช็กอินแล้ว แต่ยังไม่ได้รับ Coin เพราะยังไม่ได้ยืนยันอีเมล @cmu.ac.th';
-        else if (e.rewardedCount >= e.rewardSlots || e.escrowWallet.balance < e.rewardPerCheckIn) note = 'เช็กอินแล้ว แต่ Coin รางวัลของงานนี้หมดแล้ว';
+        if (!user.cmuVerifiedAt) note = bi('Checked in, but no Coin because your @cmu.ac.th email is not verified yet', 'เช็กอินแล้ว แต่ยังไม่ได้รับ Coin เพราะยังไม่ได้ยืนยันอีเมล @cmu.ac.th');
+        else if (e.rewardedCount >= e.rewardSlots || e.escrowWallet.balance < e.rewardPerCheckIn) note = bi('Checked in, but this event has run out of reward Coin', 'เช็กอินแล้ว แต่ Coin รางวัลของงานนี้หมดแล้ว');
         else {
           await this.ledger.post(tx, {
-            type: 'EVENT_REWARD', idempotencyKey: `event:${id}:checkin:${userId}`, memo: `รางวัลเช็กอิน Event "${e.title}"`,
+            type: 'EVENT_REWARD', idempotencyKey: `event:${id}:checkin:${userId}`, memo: bi(`Check-in reward for event "${e.title}"`, `รางวัลเช็กอิน กิจกรรม "${e.title}"`),
             entries: [{ walletId: e.escrowWalletId, delta: -e.rewardPerCheckIn }, { walletId: wallet.id, delta: e.rewardPerCheckIn }],
           });
           reward = e.rewardPerCheckIn;
@@ -391,9 +392,9 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       where: { id },
       include: { ...eventInclude(viewer.id), organizer: { select: { cmuVerifiedAt: true } } },
     });
-    if (!e) throw new NotFoundException('ไม่พบ Event');
+    if (!e) throw new NotFoundException(bi('Event not found', 'ไม่พบ กิจกรรม'));
     const isOrganizer = e.organizerId === viewer.id;
-    if ((e.status === 'PENDING_REVIEW' || e.status === 'REJECTED') && !isOrganizer && viewer.role !== 'ADMIN') throw new NotFoundException('ไม่พบ Event');
+    if ((e.status === 'PENDING_REVIEW' || e.status === 'REJECTED') && !isOrganizer && viewer.role !== 'ADMIN') throw new NotFoundException(bi('Event not found', 'ไม่พบ กิจกรรม'));
 
     const [recent, waitlistCount, hidden] = await Promise.all([
       this.prisma.eventRegistration.findMany({
@@ -435,8 +436,8 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
   /** รายชื่อผู้ลงทะเบียน — เฉพาะผู้จัด/แอดมิน */
   async attendees(id: string, viewer: AuthUser): Promise<EventAttendee[]> {
     const e = await this.prisma.event.findUnique({ where: { id }, select: { organizerId: true } });
-    if (!e) throw new NotFoundException('ไม่พบ Event');
-    if (e.organizerId !== viewer.id && viewer.role !== 'ADMIN') throw new ForbiddenException('เฉพาะผู้จัดที่ดูรายชื่อได้');
+    if (!e) throw new NotFoundException(bi('Event not found', 'ไม่พบ กิจกรรม'));
+    if (e.organizerId !== viewer.id && viewer.role !== 'ADMIN') throw new ForbiddenException(bi('Only the organizer can see the attendee list', 'เฉพาะผู้จัดที่ดูรายชื่อได้'));
     const rows = await this.prisma.eventRegistration.findMany({
       where: { eventId: id, status: { not: 'CANCELLED' } },
       orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],

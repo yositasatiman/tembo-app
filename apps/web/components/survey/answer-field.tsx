@@ -1,10 +1,12 @@
 'use client';
 import type { AnswerValue, Question } from '@tembo/shared';
 import { QUESTION_RULES } from '@tembo/shared';
+import { useT } from '@/lib/i18n';
 import { cx, inputCls } from '../ui';
 
 /** ช่องตอบ 1 ข้อ ตามชนิดคำถาม */
 export function AnswerField({ q, value, onChange, disabled }: { q: Question; value: AnswerValue | undefined; onChange: (v: AnswerValue | undefined) => void; disabled?: boolean }) {
+  const { t } = useT();
   if (q.type === 'SINGLE_CHOICE' || q.type === 'MULTI_CHOICE') {
     const multi = q.type === 'MULTI_CHOICE';
     const selected = multi ? ((value as number[] | undefined) ?? []) : value;
@@ -26,7 +28,7 @@ export function AnswerField({ q, value, onChange, disabled }: { q: Question; val
             </label>
           );
         })}
-        {multi && <p className="text-xs text-muted-foreground">เลือกได้มากกว่า 1 ข้อ</p>}
+        {multi && <p className="text-xs text-muted-foreground">{t('Choose one or more', 'เลือกได้มากกว่า 1 ข้อ')}</p>}
       </div>
     );
   }
@@ -54,7 +56,7 @@ export function AnswerField({ q, value, onChange, disabled }: { q: Question; val
   const props = {
     className: inputCls, maxLength: max, disabled, value: (value as string | undefined) ?? '',
     onChange: (e: { target: { value: string } }) => onChange(e.target.value || undefined),
-    placeholder: 'พิมพ์คำตอบ',
+    placeholder: t('Type your answer', 'พิมพ์คำตอบ'),
   };
   return long ? <textarea rows={4} {...props} /> : <input {...props} />;
 }

@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes, randomInt } from 'crypto';
 import { Prisma, SYSTEM_WALLETS, User } from '@tembo/db';
-import { COIN_RULES } from '@tembo/shared';
+import { COIN_RULES, bi } from '@tembo/shared';
 import { config } from '../config';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -65,7 +65,7 @@ export class AuthService {
           await this.ledger.post(tx, {
             type: 'SIGNUP_BONUS',
             idempotencyKey: `signup:${user.id}`,
-            memo: 'โบนัสสมัครสมาชิก',
+            memo: bi('Sign-up bonus', 'โบนัสสมัครสมาชิก'),
             entries: [
               { walletId: SYSTEM_WALLETS.MINT, delta: -COIN_RULES.SIGNUP_BONUS },
               { walletId: wallet.id, delta: COIN_RULES.SIGNUP_BONUS },
@@ -99,18 +99,18 @@ export class AuthService {
 
   /** หมุน refresh token: ใช้ได้ครั้งเดียว ถ้าเจอ token เก่าถูกใช้ซ้ำ = ยกเลิกทุกเซสชันของผู้ใช้นั้น */
   async refresh(refreshToken: string | undefined, userAgent?: string): Promise<IssuedTokens> {
-    if (!refreshToken) throw new UnauthorizedException('กรุณาเข้าสู่ระบบ');
+    if (!refreshToken) throw new UnauthorizedException(bi('Please log in', 'กรุณาเข้าสู่ระบบ'));
     const session = await this.prisma.session.findUnique({ where: { refreshTokenHash: sha256(refreshToken) }, include: { user: true } });
-    if (!session) throw new UnauthorizedException('กรุณาเข้าสู่ระบบ');
+    if (!session) throw new UnauthorizedException(bi('Please log in', 'กรุณาเข้าสู่ระบบ'));
     if (session.revokedAt) {
       // เพิ่งหมุนไปไม่ถึง 30 วินาที = น่าจะเป็นหลายแท็บ refresh พร้อมกัน ไม่ใช่ token ถูกขโมย
-      if (Date.now() - session.revokedAt.getTime() < REFRESH_REUSE_GRACE_MS) throw new UnauthorizedException('กรุณาลองใหม่');
+      if (Date.now() - session.revokedAt.getTime() < REFRESH_REUSE_GRACE_MS) throw new UnauthorizedException(bi('Please try again', 'กรุณาลองใหม่'));
       await this.prisma.session.updateMany({ where: { userId: session.userId, revokedAt: null }, data: { revokedAt: new Date() } });
-      throw new UnauthorizedException('กรุณาเข้าสู่ระบบใหม่');
+      throw new UnauthorizedException(bi('Please log in again', 'กรุณาเข้าสู่ระบบใหม่'));
     }
-    if (session.expiresAt.getTime() < Date.now()) throw new UnauthorizedException('เซสชันหมดอายุ');
+    if (session.expiresAt.getTime() < Date.now()) throw new UnauthorizedException(bi('Your session has expired', 'เซสชันหมดอายุ'));
     const revoked = await this.prisma.session.updateMany({ where: { id: session.id, revokedAt: null }, data: { revokedAt: new Date() } });
-    if (revoked.count !== 1) throw new UnauthorizedException('กรุณาเข้าสู่ระบบใหม่');
+    if (revoked.count !== 1) throw new UnauthorizedException(bi('Please log in again', 'กรุณาเข้าสู่ระบบใหม่'));
     return this.issueSession(session.user, userAgent);
   }
 

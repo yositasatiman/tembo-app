@@ -157,6 +157,7 @@ model User {
   surveyStarts  SurveyStart[]
   notifications Notification[]
   redemptions   RewardRedemption[]
+  surveyDrafts  SurveyDraft[]
   savedSurveys  SurveySave[]
 }
 
@@ -509,4 +510,21 @@ model RewardRedemption {
   @@index([status, createdAt])
   @@index([userId, createdAt])
   @@index([rewardId, userId])
+}
+
+/// ฉบับร่างแบบสอบถาม (หน้าสร้าง 4 ขั้น) — ยังไม่หัก Coin, แสดงใน "แบบสอบถามของฉัน"
+model SurveyDraft {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// ชื่อที่กรอกไว้ (ว่างได้) — ใช้แสดงในรายการ
+  title     String   @default("")
+  /// ขั้นที่ทำเสร็จแล้ว 0–4
+  stepsDone Int      @default(0)
+  /// ข้อมูลในฟอร์มทั้งหมด (โครงตามหน้าเว็บ)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, updatedAt])
 }

@@ -1,5 +1,8 @@
+'use client';
 import { useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Target, X } from 'lucide-react';
+import { fmtDMY, fmtDMYTime, type Lang } from '@tembo/shared';
+import { useT } from '@/lib/i18n';
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 
@@ -73,14 +76,15 @@ export function Badge({ children, tone = 'soft', className = '' }: { children: R
   return <span className={cx('inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold [&_svg]:size-3.5', cls, className)}>{children}</span>;
 }
 
-const STATUS: Record<string, [string, 'success' | 'warning' | 'muted']> = {
-  OPEN: ['เปิดรับ', 'success'],
-  PENDING_REVIEW: ['รอแอดมินตรวจ', 'warning'],
-  CLOSED: ['ปิดแล้ว', 'muted'],
+const STATUS: Record<string, [string, string, 'success' | 'warning' | 'muted']> = {
+  OPEN: ['Open', 'เปิดรับ', 'success'],
+  PENDING_REVIEW: ['Awaiting review', 'รอแอดมินตรวจ', 'warning'],
+  CLOSED: ['Closed', 'ปิดแล้ว', 'muted'],
 };
 export function StatusBadge({ status }: { status: string }) {
-  const [label, tone] = STATUS[status] ?? [status, 'muted'];
-  return <Badge tone={tone}>{label}</Badge>;
+  const { t } = useT();
+  const [en, th, tone] = STATUS[status] ?? [status, status, 'muted'];
+  return <Badge tone={tone}>{t(en, th)}</Badge>;
 }
 
 export function Progress({ value, className = '' }: { value: number; className?: string }) {
@@ -113,13 +117,15 @@ export function SectionHeader({ title, subtitle, action }: { title: string; subt
   );
 }
 
-export function Spinner({ label = 'กำลังโหลด…' }: { label?: string }) {
-  return <p className="py-16 text-center text-sm text-muted-foreground">{label}</p>;
+export function Spinner({ label }: { label?: string }) {
+  const { t } = useT();
+  return <p className="py-16 text-center text-sm text-muted-foreground">{label ?? t('Loading…', 'กำลังโหลด…')}</p>;
 }
 
-export const fmtDate = (iso: string) => new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
-export const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
-export const yearLabel = (y: number | null) => (y === 7 ? 'บัณฑิตศึกษา' : y ? `ปี ${y}` : '');
+/** วันที่ทั้งแอปแสดงแบบ dd/mm/yyyy (เวลาไทย) */
+export const fmtDate = (iso: string) => fmtDMYTime(iso);
+export const fmtDay = (iso: string) => fmtDMY(iso);
+export const yearLabel = (y: number | null, lang: Lang) => (y === 7 ? (lang === 'th' ? 'บัณฑิตศึกษา' : 'Graduate') : y ? (lang === 'th' ? `ปี ${y}` : `Year ${y}`) : '');
 
 /** ชิปตัวกรองแบบเม็ดยา (Figma: Filter chip) */
 export function Chip({ active, children, onClick, onCard }: { active?: boolean; children: ReactNode; onClick?: () => void; /** วางบนพื้นขาว → ใช้พื้นม่วงอ่อน */ onCard?: boolean }) {
@@ -146,12 +152,13 @@ export function EmptyState({ icon, title, text, action }: { icon: ReactNode; tit
 
 /** แถบแจ้งเตือนสั้น ๆ ด้านล่าง หายเองใน 5 วินาที */
 export function Toast({ children, onClose, action }: { children: ReactNode; onClose: () => void; action?: { label: string; onClick: () => void } }) {
+  const { t } = useT();
   useEffect(() => { const t = setTimeout(onClose, 5000); return () => clearTimeout(t); }, [onClose, children]);
   return (
     <div role="status" className="fixed inset-x-4 bottom-6 z-50 mx-auto flex max-w-sm items-center gap-3 rounded-2xl bg-indigo px-4 py-3 text-sm text-white shadow-float">
       <span className="flex-1">{children}</span>
       {action && <button type="button" onClick={action.onClick} className="font-bold text-coin">{action.label}</button>}
-      <button type="button" aria-label="ปิด" onClick={onClose} className="opacity-70 hover:opacity-100"><X className="size-4" /></button>
+      <button type="button" aria-label={t('Close', 'ปิด')} onClick={onClose} className="opacity-70 hover:opacity-100"><X className="size-4" /></button>
     </div>
   );
 }

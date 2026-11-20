@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { bi } from '@tembo/shared';
 import { Prisma, TxType } from '@tembo/db';
 
 export type Tx = Prisma.TransactionClient;
@@ -6,7 +7,7 @@ export interface EntryInput { walletId: string; delta: number }
 export interface PostInput { type: TxType; idempotencyKey: string; memo?: string; entries: EntryInput[] }
 
 export class InsufficientCoinError extends BadRequestException {
-  constructor() { super('Coin ไม่พอ'); }
+  constructor() { super(bi('Not enough Coin', 'Coin ไม่พอ')); }
 }
 
 /**

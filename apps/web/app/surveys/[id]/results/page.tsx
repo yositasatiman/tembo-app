@@ -5,6 +5,7 @@ import { ArrowLeft, Download } from 'lucide-react';
 import { QUESTION_TYPE_LABEL, type QuestionResult, type SurveyResults } from '@tembo/shared';
 import { api } from '@/lib/api';
 import { AppShell } from '@/components/shell';
+import { useT } from '@/lib/i18n';
 import { Badge, buttonCls, Card, SectionHeader, Spinner } from '@/components/ui';
 
 export default function ResultsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -13,6 +14,7 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
 }
 
 function Results({ id }: { id: string }) {
+  const { t } = useT();
   const [r, setR] = useState<SurveyResults | null>(null);
   const [error, setError] = useState('');
   useEffect(() => { api<SurveyResults>(`/surveys/${id}/results`).then(setR).catch((e) => setError((e as Error).message)); }, [id]);
@@ -22,22 +24,22 @@ function Results({ id }: { id: string }) {
 
   return (
     <div className="max-w-3xl space-y-4">
-      <Link href={`/surveys/${id}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />กลับไปหน้าแบบสอบถาม</Link>
+      <Link href={`/surveys/${id}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />{t('Back to the survey', 'กลับไปหน้าแบบสอบถาม')}</Link>
       <SectionHeader
-        title={`ผลลัพธ์: ${r.title}`}
-        subtitle={`ผู้ตอบทั้งหมด ${r.responses} คน · ไม่แสดงชื่อหรืออีเมลผู้ตอบ`}
-        action={<a href={`/api/surveys/${id}/results.csv`} className={buttonCls(r.responses ? 'primary' : 'outline', 'sm')}><Download />ดาวน์โหลด CSV</a>}
+        title={t(`Results: ${r.title}`, `ผลลัพธ์: ${r.title}`)}
+        subtitle={t(`${r.responses} responses · names and emails are never shown`, `ผู้ตอบทั้งหมด ${r.responses} คน · ไม่แสดงชื่อหรืออีเมลผู้ตอบ`)}
+        action={<a href={`/api/surveys/${id}/results.csv`} className={buttonCls(r.responses ? 'primary' : 'outline', 'sm')}><Download />{t('Download CSV', 'ดาวน์โหลด CSV')}</a>}
       />
 
       {r.byFaculty.length > 0 && (
         <Card className="space-y-3">
-          <h3 className="font-extrabold">ผู้ตอบแยกตามคณะ</h3>
+          <h3 className="font-extrabold">{t('Responses by faculty', 'ผู้ตอบแยกตามคณะ')}</h3>
           <Bars rows={r.byFaculty.map((f) => ({ label: f.faculty, count: f.count }))} total={r.responses} />
         </Card>
       )}
 
       {r.questions.length === 0 && (
-        <Card className="text-sm text-muted-foreground">แบบสอบถามนี้ใช้ฟอร์มภายนอก คำตอบอยู่ในฟอร์มของคุณ · ไฟล์ CSV มีรหัสอ้างอิงของผู้ตอบแต่ละคนไว้เทียบกับฟอร์ม</Card>
+        <Card className="text-sm text-muted-foreground">{t('This survey uses an external form, so the answers are in your form. The CSV file lists who responded.', 'แบบสอบถามนี้ใช้ฟอร์มภายนอก คำตอบอยู่ในฟอร์มของคุณ · ไฟล์ CSV มีรายชื่อการตอบไว้เทียบกับฟอร์ม')}</Card>
       )}
       {r.questions.map((q, i) => <QuestionCard key={q.question.id} n={i + 1} q={q} total={r.responses} />)}
     </div>
@@ -45,24 +47,25 @@ function Results({ id }: { id: string }) {
 }
 
 function QuestionCard({ n, q, total }: { n: number; q: QuestionResult; total: number }) {
+  const { t, p } = useT();
   return (
     <Card className="space-y-3 p-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h3 className="font-medium"><span className="mr-2 text-muted-foreground">{n}.</span>{q.question.title}</h3>
-        <Badge tone="outline">{QUESTION_TYPE_LABEL[q.question.type]}</Badge>
+        <Badge tone="outline">{p(QUESTION_TYPE_LABEL[q.question.type])}</Badge>
       </div>
-      <p className="text-xs text-muted-foreground">ตอบ {q.answered}/{total} คน</p>
+      <p className="text-xs text-muted-foreground">{t(`${q.answered}/${total} answered`, `ตอบ ${q.answered}/${total} คน`)}</p>
       {q.kind === 'choice' && <Bars rows={q.question.options.map((o, i) => ({ label: o, count: q.counts[i] }))} total={q.answered} />}
       {q.kind === 'scale' && (
         <>
-          <p className="text-sm">ค่าเฉลี่ย <b className="text-lg text-primary">{q.average ?? '–'}</b> / {q.question.scaleMax}</p>
+          <p className="text-sm">{t('Average', 'ค่าเฉลี่ย')} <b className="text-lg text-primary">{q.average ?? '–'}</b> / {q.question.scaleMax}</p>
           <Bars rows={q.counts.map((c, i) => ({ label: `${i + 1}${i === 0 && q.question.minLabel ? ` (${q.question.minLabel})` : ''}${i === q.counts.length - 1 && q.question.maxLabel ? ` (${q.question.maxLabel})` : ''}`, count: c }))} total={q.answered} />
         </>
       )}
       {q.kind === 'text' && (q.samples.length
         ? <ul className="max-h-72 space-y-2 overflow-y-auto">{q.samples.map((t, i) => <li key={i} className="rounded-xl bg-muted px-3 py-2 text-sm whitespace-pre-line">{t}</li>)}</ul>
-        : <p className="text-sm text-muted-foreground">ยังไม่มีคำตอบ</p>)}
-      {q.kind === 'text' && q.answered > q.samples.length && <p className="text-xs text-muted-foreground">แสดง {q.samples.length} คำตอบล่าสุด — ดูทั้งหมดในไฟล์ CSV</p>}
+        : <p className="text-sm text-muted-foreground">{t('No answers yet', 'ยังไม่มีคำตอบ')}</p>)}
+      {q.kind === 'text' && q.answered > q.samples.length && <p className="text-xs text-muted-foreground">{t(`Showing the latest ${q.samples.length} answers. See all of them in the CSV file.`, `แสดง ${q.samples.length} คำตอบล่าสุด — ดูทั้งหมดในไฟล์ CSV`)}</p>}
     </Card>
   );
 }

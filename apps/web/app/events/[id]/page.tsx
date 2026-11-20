@@ -6,7 +6,8 @@ import {
   BadgeCheck, Ban, CalendarDays, CalendarPlus, CheckCircle2, Clock, Coins, ExternalLink, Hourglass,
   MapPin, QrCode, Settings2, Share2, Ticket, XCircle,
 } from 'lucide-react';
-import { EVENT_CATEGORY_LABEL, type EventDetail } from '@tembo/shared';
+import { EVENT_CATEGORY_LABEL, interestLabel, type EventDetail } from '@tembo/shared';
+import { useT } from '@/lib/i18n';
 import { api, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
 import { Banner, cx, ErrorText, Spinner, Toast } from '@/components/ui';
@@ -21,6 +22,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
 /** ตาม Figma "EVENT / Detail", "EVENT / Registered", "EVENT / Cancelled" */
 function Detail({ id }: { id: string }) {
   const { reload: reloadMe } = useMe();
+  const { t, p, lang } = useT();
   const router = useRouter();
   const [e, setE] = useState<EventDetail | null>(null);
   const [error, setError] = useState('');
@@ -45,24 +47,24 @@ function Detail({ id }: { id: string }) {
   const path = `/events/${e.id}`;
   const register = () => act(() => post<EventDetail>(`/events/${e.id}/register`));
   const unregister = () => {
-    if (!window.confirm(e.myStatus === 'WAITLISTED' ? 'ออกจากคิวรอ?' : 'ยกเลิกการลงทะเบียน? ที่นั่งของคุณจะให้คนในคิวถัดไป')) return;
+    if (!window.confirm(e.myStatus === 'WAITLISTED' ? t('Leave the waitlist?', 'ออกจากคิวรอ?') : t('Cancel your registration? Your spot will go to the next person in the waitlist.', 'ยกเลิกการลงทะเบียน? ที่นั่งของคุณจะให้คนในคิวถัดไป'))) return;
     act(() => api<EventDetail>(`/events/${e.id}/register`, { method: 'DELETE' }));
   };
   const notInterested = () => act(() => post(`/events/${e.id}/hide`)).then(() => router.push('/events'));
   const cancelEvent = () => {
-    if (!window.confirm(e.status === 'PENDING_REVIEW' ? 'ยกเลิก Event นี้? ระบบจะคืน Coin ทั้งหมดรวมค่าโพสต์' : 'ยกเลิก Event นี้? ผู้ที่ลงทะเบียนจะเห็นว่างานถูกยกเลิก และ Coin รางวัลที่เหลือจะคืนให้คุณ (ค่าโพสต์ไม่คืน)')) return;
+    if (!window.confirm(e.status === 'PENDING_REVIEW' ? t('Cancel this event? All your Coin, including the posting fee, will be refunded.', 'ยกเลิกกิจกรรมนี้? ระบบจะคืน Coin ทั้งหมดรวมค่าโพสต์') : t('Cancel this event? Registered people will see that it was cancelled, and the remaining reward Coin will be returned to you (the posting fee is not refunded).', 'ยกเลิกกิจกรรมนี้? ผู้ที่ลงทะเบียนจะเห็นว่างานถูกยกเลิก และ Coin รางวัลที่เหลือจะคืนให้คุณ (ค่าโพสต์ไม่คืน)'))) return;
     act(() => post<EventDetail>(`/events/${e.id}/cancel`));
   };
 
   const registrationBadge = {
-    open: ['เปิดลงทะเบียน', 'bg-success-soft text-success'],
-    registered: ['ลงทะเบียนแล้ว', 'bg-success-soft text-success'],
-    waitlisted: ['อยู่ในคิวรอ', 'bg-coin-soft text-warning-foreground'],
-    full: ['ที่นั่งเต็ม', 'bg-destructive-soft text-destructive'],
-    pending: ['รอแอดมินตรวจ', 'bg-coin-soft text-warning-foreground'],
-    rejected: ['ไม่ผ่านการตรวจ', 'bg-destructive-soft text-destructive'],
-    cancelled: ['ยกเลิกแล้ว', 'bg-destructive-soft text-destructive'],
-    ended: ['จบแล้ว', 'bg-muted text-muted-foreground'],
+    open: [t('Open', 'เปิดลงทะเบียน'), 'bg-success-soft text-success'],
+    registered: [t('Registered', 'ลงทะเบียนแล้ว'), 'bg-success-soft text-success'],
+    waitlisted: [t('On waitlist', 'อยู่ในคิวรอ'), 'bg-coin-soft text-warning-foreground'],
+    full: [t('Full', 'ที่นั่งเต็ม'), 'bg-destructive-soft text-destructive'],
+    pending: [t('In review', 'รอแอดมินตรวจ'), 'bg-coin-soft text-warning-foreground'],
+    rejected: [t('Not approved', 'ไม่ผ่านการตรวจ'), 'bg-destructive-soft text-destructive'],
+    cancelled: [t('Cancelled', 'ยกเลิกแล้ว'), 'bg-destructive-soft text-destructive'],
+    ended: [t('Ended', 'จบแล้ว'), 'bg-muted text-muted-foreground'],
   }[state];
 
   return (
@@ -72,9 +74,9 @@ function Detail({ id }: { id: string }) {
       <EventCover e={e} className="h-[150px] rounded-none sm:h-[200px] sm:rounded-2xl">
         <div className="flex items-start justify-between">
           <span className="rounded-full bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-primary">
-            {e.capacity === null ? 'ไม่จำกัดจำนวน' : e.isFull ? EVENT_CATEGORY_LABEL[e.category] : `ว่าง ${(e.capacity - e.registeredCount).toLocaleString()} ที่`}
+            {e.capacity === null ? t('Unlimited spots', 'ไม่จำกัดจำนวน') : e.isFull ? p(EVENT_CATEGORY_LABEL[e.category]) : t(`${(e.capacity - e.registeredCount).toLocaleString()} spots left`, `ว่าง ${(e.capacity - e.registeredCount).toLocaleString()} ที่`)}
           </span>
-          <button type="button" aria-label="แชร์" onClick={async () => { const m = await shareLink(e.title, path); if (m) setToast(m); }}
+          <button type="button" aria-label={t('Share', 'แชร์')} onClick={async () => { const m = await shareLink(e.title, path, t); if (m) setToast(m); }}
             className="flex size-[34px] items-center justify-center rounded-full bg-white text-primary"><Share2 className="size-4" /></button>
         </div>
         <span className={cx('self-start rounded-full px-2.5 py-1.5 text-[11px] font-extrabold', registrationBadge[1])}>{registrationBadge[0]}</span>
@@ -86,43 +88,43 @@ function Detail({ id }: { id: string }) {
           <span className="flex size-[30px] items-center justify-center rounded-full bg-lavender text-[9px] font-extrabold text-primary">{hostMark(e.hostName)}</span>
           <div className="leading-tight">
             <p className="text-xs font-bold">{e.hostName}</p>
-            <p className="text-[10px] text-muted-foreground">{e.organizerVerified ? 'ผู้จัดยืนยันอีเมล มช. แล้ว' : 'ผู้จัดยังไม่ยืนยันอีเมล มช.'}</p>
+            <p className="text-[10px] text-muted-foreground">{e.organizerVerified ? t('Organizer has a verified CMU email', 'ผู้จัดยืนยันอีเมล มช. แล้ว') : t('Organizer has not verified a CMU email', 'ผู้จัดยังไม่ยืนยันอีเมล มช.')}</p>
           </div>
-          {e.organizerVerified && <BadgeCheck className="size-4 text-success" aria-label="ยืนยันแล้ว" />}
+          {e.organizerVerified && <BadgeCheck className="size-4 text-success" aria-label={t('Verified', 'ยืนยันแล้ว')} />}
         </div>
       </div>
 
       <section className="rounded-2xl bg-card p-3">
-        <h2 className="text-[15px] font-extrabold">เกี่ยวกับ Event</h2>
+        <h2 className="text-[15px] font-extrabold">{t('About this event', 'เกี่ยวกับกิจกรรม')}</h2>
         <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-line text-muted-foreground">{e.description}</p>
         {e.tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">{e.tags.map((t) => <span key={t} className="rounded-full bg-lavender-soft px-2 py-1 text-[11px] font-bold text-primary">{t}</span>)}</div>
+          <div className="mt-2 flex flex-wrap gap-1.5">{e.tags.map((x) => <span key={x} className="rounded-full bg-lavender-soft px-2 py-1 text-[11px] font-bold text-primary">{p(interestLabel(x))}</span>)}</div>
         )}
       </section>
 
       <section className="space-y-2 rounded-2xl bg-card p-3">
-        <InfoRow icon={<CalendarDays />} label="วันและเวลา" value={eventTimeLong(e.startsAt, e.endsAt)} />
-        <InfoRow icon={<MapPin />} label="สถานที่" value={e.location} />
+        <InfoRow icon={<CalendarDays />} label={t('Date and time', 'วันและเวลา')} value={eventTimeLong(e.startsAt, e.endsAt, lang)} />
+        <InfoRow icon={<MapPin />} label={t('Location', 'สถานที่')} value={e.location} />
         {e.rewardPerCheckIn > 0 && (
-          <InfoRow icon={<Coins />} label="รางวัลเมื่อเช็กอินที่งาน" value={`+${e.rewardPerCheckIn} Coin · เหลือ ${e.rewardsLeft.toLocaleString()} สิทธิ์`} coin />
+          <InfoRow icon={<Coins />} label={t('Reward for checking in', 'รางวัลเมื่อเช็กอินที่งาน')} value={t(`+${e.rewardPerCheckIn} Coin · ${e.rewardsLeft.toLocaleString()} left`, `+${e.rewardPerCheckIn} Coin · เหลือ ${e.rewardsLeft.toLocaleString()} สิทธิ์`)} coin />
         )}
         {e.registrationUrl && (
-          <InfoRow icon={<ExternalLink />} label="ฟอร์มลงทะเบียนของผู้จัด" value={<a href={e.registrationUrl} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline">{new URL(e.registrationUrl).host}</a>} />
+          <InfoRow icon={<ExternalLink />} label={t("Organizer's registration form", 'ฟอร์มลงทะเบียนของผู้จัด')} value={<a href={e.registrationUrl} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline">{new URL(e.registrationUrl).host}</a>} />
         )}
       </section>
 
       <section className="flex items-center justify-between rounded-2xl bg-card p-3">
         <div className="leading-tight">
-          <p className="text-xs font-extrabold">{e.registeredCount.toLocaleString()} คนเข้าร่วม{e.capacity !== null && ` จาก ${e.capacity.toLocaleString()} ที่`}</p>
+          <p className="text-xs font-extrabold">{e.capacity !== null ? t(`${e.registeredCount.toLocaleString()} of ${e.capacity.toLocaleString()} going`, `${e.registeredCount.toLocaleString()} คนเข้าร่วม จาก ${e.capacity.toLocaleString()} ที่`) : t(`${e.registeredCount.toLocaleString()} going`, `${e.registeredCount.toLocaleString()} คนเข้าร่วม`)}</p>
           <p className="text-[10px] text-muted-foreground">
-            {e.waitlistCount > 0 ? `รอคิวอีก ${e.waitlistCount.toLocaleString()} คน` : e.registeredCount ? 'มาร่วมงานกับเพื่อน ๆ ชาว มช.' : 'ยังไม่มีคนลงทะเบียน — เป็นคนแรกเลย'}
-            {e.checkedInCount > 0 && ` · เช็กอินแล้ว ${e.checkedInCount.toLocaleString()} คน`}
+            {e.waitlistCount > 0 ? t(`${e.waitlistCount.toLocaleString()} on the waitlist`, `รอคิวอีก ${e.waitlistCount.toLocaleString()} คน`) : e.registeredCount ? t('Join your CMU friends', 'มาร่วมงานกับเพื่อน ๆ ชาว มช.') : t('No one has registered yet. Be the first!', 'ยังไม่มีคนลงทะเบียน — เป็นคนแรกเลย')}
+            {e.checkedInCount > 0 && t(` · ${e.checkedInCount.toLocaleString()} checked in`, ` · เช็กอินแล้ว ${e.checkedInCount.toLocaleString()} คน`)}
           </p>
         </div>
         <div className="flex">
-          {e.participantInitials.map((p, i) => (
+          {e.participantInitials.map((ini, i) => (
             <span key={i} className={cx('-mr-1.5 flex size-7 items-center justify-center rounded-full border-2 border-white text-[8px] font-extrabold last:mr-0',
-              ['bg-lavender', 'bg-coin-soft', 'bg-success-soft'][i % 3])}>{p}</span>
+              ['bg-lavender', 'bg-coin-soft', 'bg-success-soft'][i % 3])}>{ini}</span>
           ))}
         </div>
       </section>
@@ -151,56 +153,58 @@ function InfoRow({ icon, label, value, coin }: { icon: ReactNode; label: string;
 }
 
 function StatusBanner({ e, state }: { e: EventDetail; state: ReturnType<typeof eventState> }) {
+  const { t } = useT();
   if (e.myCheckedIn) {
     return (
-      <Banner tone="success" icon={<CheckCircle2 />} title="เช็กอินแล้ว">
-        {e.myReward > 0 ? `คุณได้รับ ${e.myReward} Coin จากการเข้าร่วมงานนี้` : 'ขอบคุณที่มาร่วมงาน'}
+      <Banner tone="success" icon={<CheckCircle2 />} title={t('Checked in', 'เช็กอินแล้ว')}>
+        {e.myReward > 0 ? t(`You got ${e.myReward} Coin for joining this event`, `คุณได้รับ ${e.myReward} Coin จากการเข้าร่วมงานนี้`) : t('Thanks for coming!', 'ขอบคุณที่มาร่วมงาน')}
       </Banner>
     );
   }
   switch (state) {
     case 'registered':
       return (
-        <Banner tone="success" icon={<Ticket />} title="คุณลงทะเบียนแล้ว">
+        <Banner tone="success" icon={<Ticket />} title={t("You're registered", 'คุณลงทะเบียนแล้ว')}>
           {e.registrationUrl
-            ? <>บันทึกการลงทะเบียนใน TEMBO แล้ว กรอก <a href={e.registrationUrl} target="_blank" rel="noopener noreferrer" className="font-bold text-primary underline">ฟอร์มของผู้จัด</a> ให้เรียบร้อยเพื่อยืนยันที่นั่ง</>
-            : 'เจอกันที่งาน! เปิดหน้านี้แล้วสแกน QR ของผู้จัดเพื่อเช็กอิน'}
+            ? <>{t('Saved in TEMBO. Fill in the ', 'บันทึกการลงทะเบียนใน TEMBO แล้ว กรอก ')}<a href={e.registrationUrl} target="_blank" rel="noopener noreferrer" className="font-bold text-primary underline">{t("organizer's form", 'ฟอร์มของผู้จัด')}</a>{t(' to confirm your spot.', ' ให้เรียบร้อยเพื่อยืนยันที่นั่ง')}</>
+            : t("See you there! Open this page and scan the organizer's QR to check in.", 'เจอกันที่งาน! เปิดหน้านี้แล้วสแกน QR ของผู้จัดเพื่อเช็กอิน')}
         </Banner>
       );
     case 'waitlisted':
       return (
-        <Banner tone="warning" icon={<Hourglass />} title={`อยู่ในคิวรอ ลำดับที่ ${e.myWaitlistPosition ?? '-'}`}>
-          ถ้ามีคนยกเลิก ระบบจะเลื่อนคุณขึ้นเป็นผู้ลงทะเบียนให้อัตโนมัติ
+        <Banner tone="warning" icon={<Hourglass />} title={t(`On the waitlist, position ${e.myWaitlistPosition ?? '-'}`, `อยู่ในคิวรอ ลำดับที่ ${e.myWaitlistPosition ?? '-'}`)}>
+          {t('If someone cancels, you will be moved up automatically.', 'ถ้ามีคนยกเลิก ระบบจะเลื่อนคุณขึ้นเป็นผู้ลงทะเบียนให้อัตโนมัติ')}
         </Banner>
       );
     case 'full':
-      return <Banner tone="danger" icon={<XCircle />} title="ที่นั่งเต็มแล้ว">Event นี้เต็มแล้ว เข้าคิวรอไว้ได้ ถ้ามีที่ว่างระบบจะเลื่อนคุณขึ้นให้</Banner>;
+      return <Banner tone="danger" icon={<XCircle />} title={t('This event is full', 'ที่นั่งเต็มแล้ว')}>{t('Join the waitlist and you will be moved up if a spot opens.', 'กิจกรรมนี้เต็มแล้ว เข้าคิวรอไว้ได้ ถ้ามีที่ว่างระบบจะเลื่อนคุณขึ้นให้')}</Banner>;
     case 'pending':
-      return <Banner tone="warning" icon={<Clock />} title="รอแอดมินตรวจ">Event จะขึ้นฟีดหลังแอดมินอนุมัติ ค่าโพสต์และ Coin รางวัลพักไว้ใน Escrow ก่อน</Banner>;
+      return <Banner tone="warning" icon={<Clock />} title={t('Waiting for admin review', 'รอแอดมินตรวจ')}>{t('Your event goes live after an admin approves it. The posting fee and reward Coin are held until then.', 'กิจกรรมจะขึ้นฟีดหลังแอดมินอนุมัติ ค่าโพสต์และ Coin รางวัลจะถูกพักไว้ก่อน')}</Banner>;
     case 'rejected':
-      return <Banner tone="danger" icon={<XCircle />} title="แอดมินไม่อนุมัติ">{e.reviewNote ? `เหตุผล: ${e.reviewNote} · ` : ''}คืน Coin ทั้งหมดให้คุณแล้ว</Banner>;
+      return <Banner tone="danger" icon={<XCircle />} title={t('Not approved by an admin', 'แอดมินไม่อนุมัติ')}>{e.reviewNote ? t(`Reason: ${e.reviewNote} · `, `เหตุผล: ${e.reviewNote} · `) : ''}{t('All your Coin has been refunded.', 'คืน Coin ทั้งหมดให้คุณแล้ว')}</Banner>;
     case 'cancelled':
-      return <Banner tone="danger" icon={<Ban />} title="Event นี้ถูกยกเลิก">ผู้จัดยกเลิก Event นี้แล้ว</Banner>;
+      return <Banner tone="danger" icon={<Ban />} title={t('This event was cancelled', 'กิจกรรมนี้ถูกยกเลิก')}>{t('The organizer cancelled this event.', 'ผู้จัดยกเลิกกิจกรรมนี้แล้ว')}</Banner>;
     case 'ended':
-      return <Banner tone="info" icon={<CalendarDays />} title="Event นี้จบแล้ว">ขอบคุณทุกคนที่มาร่วมงาน</Banner>;
+      return <Banner tone="info" icon={<CalendarDays />} title={t('This event has ended', 'กิจกรรมนี้จบแล้ว')}>{t('Thanks to everyone who came!', 'ขอบคุณทุกคนที่มาร่วมงาน')}</Banner>;
     default:
       return null;
   }
 }
 
 function OrganizerPanel({ e }: { e: EventDetail }) {
+  const { t } = useT();
   return (
     <section className="space-y-2 rounded-2xl border border-primary/20 bg-lavender-soft p-3">
-      <p className="text-xs font-extrabold text-primary">สำหรับผู้จัด</p>
+      <p className="text-xs font-extrabold text-primary">{t('For organizers', 'สำหรับผู้จัด')}</p>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <Stat label="ลงทะเบียน" value={e.registeredCount} />
-        <Stat label="คิวรอ" value={e.waitlistCount} />
-        <Stat label="เช็กอิน" value={e.checkedInCount} />
+        <Stat label={t('Registered', 'ลงทะเบียน')} value={e.registeredCount} />
+        <Stat label={t('Waitlist', 'คิวรอ')} value={e.waitlistCount} />
+        <Stat label={t('Checked in', 'เช็กอิน')} value={e.checkedInCount} />
       </div>
       <p className="text-[11px] text-muted-foreground">
-        ค่าโพสต์ {e.postFee} Coin · Coin ใน Escrow {e.escrowBalance?.toLocaleString() ?? 0}
-        {e.rewardPerCheckIn > 0 && ` · จ่ายรางวัลแล้ว ${e.rewardedCount}/${e.rewardSlots} คน`}
-        {' '}· เปิดเช็กอิน {timeOnly(e.checkInOpensAt)}–{timeOnly(e.checkInClosesAt)} น.
+        {t('Posting fee', 'ค่าโพสต์')} {e.postFee} Coin · {t('Reward Coin held', 'Coin รางวัลที่พักไว้')} {e.escrowBalance?.toLocaleString() ?? 0}
+        {e.rewardPerCheckIn > 0 && t(` · rewards paid ${e.rewardedCount}/${e.rewardSlots}`, ` · จ่ายรางวัลแล้ว ${e.rewardedCount}/${e.rewardSlots} คน`)}
+        {' '}· {t('check-in', 'เปิดเช็กอิน')} {timeOnly(e.checkInOpensAt)}–{timeOnly(e.checkInClosesAt)}{t('', ' น.')}
       </p>
     </section>
   );
@@ -224,50 +228,51 @@ function Actions({ e, state, busy, onRegister, onUnregister, onNotInterested, on
   e: EventDetail; state: ReturnType<typeof eventState>; busy: boolean;
   onRegister: () => void; onUnregister: () => void; onNotInterested: () => void; onCancelEvent: () => void; onCalendar: () => void;
 }) {
+  const { t } = useT();
   if (e.isOrganizer) {
     const live = e.status === 'PUBLISHED' && state !== 'ended';
     return (
       <div className="flex gap-2">
-        {(live || e.status === 'PENDING_REVIEW') && <button type="button" disabled={busy} onClick={onCancelEvent} className={outline}><Ban />ยกเลิก Event</button>}
-        {(e.status === 'PUBLISHED' || e.status === 'ENDED') && <Link href={`/events/${e.id}/manage`} className={primary}>{live ? <><QrCode />เปิด QR เช็กอิน</> : <><Settings2 />ดูผู้เข้าร่วม</>}</Link>}
+        {(live || e.status === 'PENDING_REVIEW') && <button type="button" disabled={busy} onClick={onCancelEvent} className={outline}><Ban />{t('Cancel event', 'ยกเลิกกิจกรรม')}</button>}
+        {(e.status === 'PUBLISHED' || e.status === 'ENDED') && <Link href={`/events/${e.id}/manage`} className={primary}>{live ? <><QrCode />{t('Open check-in QR', 'เปิด QR เช็กอิน')}</> : <><Settings2 />{t('View attendees', 'ดูผู้เข้าร่วม')}</>}</Link>}
       </div>
     );
   }
-  if (e.myCheckedIn) return <div className="flex gap-2"><Link href="/events" className={outline}>หา Event อื่น</Link><button type="button" onClick={onCalendar} className={primary}><CalendarPlus />เพิ่มลงปฏิทิน</button></div>;
+  if (e.myCheckedIn) return <div className="flex gap-2"><Link href="/events" className={outline}>{t('Find other events', 'หากิจกรรมอื่น')}</Link><button type="button" onClick={onCalendar} className={primary}><CalendarPlus />{t('Add to calendar', 'เพิ่มลงปฏิทิน')}</button></div>;
   switch (state) {
     case 'open':
       return (
         <div className="flex gap-2">
-          <button type="button" disabled={busy} onClick={onNotInterested} className={outline}>ไม่สนใจ</button>
-          <button type="button" disabled={busy} onClick={onRegister} className={primary}>{e.registrationUrl ? <ExternalLink /> : <Ticket />}ลงทะเบียน</button>
+          <button type="button" disabled={busy} onClick={onNotInterested} className={outline}>{t('Not interested', 'ไม่สนใจ')}</button>
+          <button type="button" disabled={busy} onClick={onRegister} className={primary}>{e.registrationUrl ? <ExternalLink /> : <Ticket />}{t('Register', 'ลงทะเบียน')}</button>
         </div>
       );
     case 'full':
       return (
         <div className="flex gap-2">
-          <Link href="/events" className={outline}>หา Event อื่น</Link>
-          <button type="button" disabled={busy} onClick={onRegister} className={primary}><Hourglass />เข้าคิวรอ</button>
+          <Link href="/events" className={outline}>{t('Find other events', 'หากิจกรรมอื่น')}</Link>
+          <button type="button" disabled={busy} onClick={onRegister} className={primary}><Hourglass />{t('Join waitlist', 'เข้าคิวรอ')}</button>
         </div>
       );
     case 'registered':
       return (
         <div className="space-y-2">
-          {e.registrationUrl && <a href={e.registrationUrl} target="_blank" rel="noopener noreferrer" className={cx(primary, 'w-full')}><ExternalLink />กรอกฟอร์มของผู้จัด</a>}
-          {e.checkInOpen && <Link href={`/events/${e.id}/checkin`} className={cx(e.registrationUrl ? outline : primary, 'w-full')}><QrCode />เช็กอินเข้างาน</Link>}
+          {e.registrationUrl && <a href={e.registrationUrl} target="_blank" rel="noopener noreferrer" className={cx(primary, 'w-full')}><ExternalLink />{t("Fill in the organizer's form", 'กรอกฟอร์มของผู้จัด')}</a>}
+          {e.checkInOpen && <Link href={`/events/${e.id}/checkin`} className={cx(e.registrationUrl ? outline : primary, 'w-full')}><QrCode />{t('Check in', 'เช็กอินเข้างาน')}</Link>}
           <div className="flex gap-2">
-            <button type="button" disabled={busy} onClick={onUnregister} className={danger}>ยกเลิกการลงทะเบียน</button>
-            <button type="button" onClick={onCalendar} className={e.registrationUrl || e.checkInOpen ? outline : primary}><CalendarPlus />เพิ่มลงปฏิทิน</button>
+            <button type="button" disabled={busy} onClick={onUnregister} className={danger}>{t('Cancel registration', 'ยกเลิกการลงทะเบียน')}</button>
+            <button type="button" onClick={onCalendar} className={e.registrationUrl || e.checkInOpen ? outline : primary}><CalendarPlus />{t('Add to calendar', 'เพิ่มลงปฏิทิน')}</button>
           </div>
         </div>
       );
     case 'waitlisted':
       return (
         <div className="flex gap-2">
-          <button type="button" disabled={busy} onClick={onUnregister} className={outline}>ออกจากคิว</button>
-          <button type="button" onClick={onCalendar} className={primary}><CalendarPlus />เพิ่มลงปฏิทิน</button>
+          <button type="button" disabled={busy} onClick={onUnregister} className={outline}>{t('Leave waitlist', 'ออกจากคิว')}</button>
+          <button type="button" onClick={onCalendar} className={primary}><CalendarPlus />{t('Add to calendar', 'เพิ่มลงปฏิทิน')}</button>
         </div>
       );
     default:
-      return <Link href="/events" className={cx(outline, 'w-full')}>ดู Event อื่น</Link>;
+      return <Link href="/events" className={cx(outline, 'w-full')}>{t('See other events', 'ดูกิจกรรมอื่น')}</Link>;
   }
 }

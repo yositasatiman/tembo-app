@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, Coins, Eye } from 'lucide-react';
 import { validateAnswers, type Answers, type AnswerValue, type SurveyForm } from '@tembo/shared';
 import { api, ApiError, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
+import { useT } from '@/lib/i18n';
 import { AnswerField } from '@/components/survey/answer-field';
 import { Badge, Button, buttonCls, Card, ErrorText, Notice, Progress, Spinner } from '@/components/ui';
 
@@ -17,6 +18,7 @@ export default function AnswerPage({ params }: { params: Promise<{ id: string }>
 function AnswerForm({ id }: { id: string }) {
   const router = useRouter();
   const { me, reload } = useMe();
+  const { t, p } = useT();
   const [form, setForm] = useState<SurveyForm | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -74,11 +76,11 @@ function AnswerForm({ id }: { id: string }) {
       <div className="max-w-3xl">
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
           <span className="flex size-14 items-center justify-center rounded-full bg-success-soft text-success"><CheckCircle2 className="size-8" /></span>
-          <h1 className="text-xl font-extrabold">ขอบคุณที่ช่วยงานวิจัย!</h1>
-          <p className="flex items-center gap-1.5 text-sm"><Coins className="size-4 text-primary" />ได้รับ <b>{done.reward} Coin</b> · คงเหลือ {done.balance.toLocaleString()} Coin</p>
+          <h1 className="text-xl font-extrabold">{t('Thanks for helping with this research!', 'ขอบคุณที่ช่วยงานวิจัย!')}</h1>
+          <p className="flex items-center gap-1.5 text-sm"><Coins className="size-4 text-primary" />{t('You received', 'ได้รับ')} <b>{done.reward} Coin</b> · {t('balance', 'คงเหลือ')} {done.balance.toLocaleString()} Coin</p>
           <div className="mt-2 flex gap-2">
-            <Link href="/surveys" className={buttonCls('primary', 'sm')}>ทำแบบสอบถามอื่นต่อ</Link>
-            <Link href={`/surveys/${id}`} className={buttonCls('outline', 'sm')}>กลับไปหน้าแบบสอบถาม</Link>
+            <Link href="/surveys" className={buttonCls('primary', 'sm')}>{t('Answer another survey', 'ทำแบบสอบถามอื่นต่อ')}</Link>
+            <Link href={`/surveys/${id}`} className={buttonCls('outline', 'sm')}>{t('Back to the survey', 'กลับไปหน้าแบบสอบถาม')}</Link>
           </div>
         </Card>
       </div>
@@ -95,10 +97,10 @@ function AnswerForm({ id }: { id: string }) {
         </div>
         {form.description && <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{form.description}</p>}
         {isOwner
-          ? <Notice tone="warning"><Eye className="mr-1 inline size-4" />ตัวอย่างสำหรับผู้โพสต์ — ส่งคำตอบไม่ได้</Notice>
-          : <p className="text-xs text-muted-foreground">ผู้โพสต์จะเห็นคำตอบพร้อมคณะและชั้นปีของคุณ แต่ไม่เห็นชื่อหรืออีเมล · {me.displayName}</p>}
+          ? <Notice tone="warning"><Eye className="mr-1 inline size-4" />{t('Owner preview: you cannot submit answers', 'ตัวอย่างสำหรับผู้โพสต์ — ส่งคำตอบไม่ได้')}</Notice>
+          : <p className="text-xs text-muted-foreground">{t('The owner sees your answers with your faculty and year, but not your name or email', 'ผู้โพสต์จะเห็นคำตอบพร้อมคณะและชั้นปีของคุณ แต่ไม่เห็นชื่อหรืออีเมล')} · {me.displayName}</p>}
         <div className="space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground"><span>ข้อบังคับที่ตอบแล้ว {answeredRequired}/{required.length}</span><span>{form.questions.length} ข้อ</span></div>
+          <div className="flex justify-between text-xs text-muted-foreground"><span>{t(`Required answered ${answeredRequired}/${required.length}`, `ข้อบังคับที่ตอบแล้ว ${answeredRequired}/${required.length}`)}</span><span>{t(`${form.questions.length} questions`, `${form.questions.length} ข้อ`)}</span></div>
           <Progress value={pct} />
         </div>
       </Card>
@@ -108,23 +110,24 @@ function AnswerForm({ id }: { id: string }) {
           <fieldset className="space-y-3">
             <legend className="font-medium">
               <span className="mr-2 text-muted-foreground">{i + 1}.</span>{q.title}
-              {q.required ? <span className="ml-1 text-destructive">*</span> : <span className="ml-2 text-xs text-muted-foreground">(ไม่บังคับ)</span>}
+              {q.required ? <span className="ml-1 text-destructive">*</span> : <span className="ml-2 text-xs text-muted-foreground">{t('(optional)', '(ไม่บังคับ)')}</span>}
             </legend>
             <AnswerField q={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} disabled={isOwner} />
-            {errors[q.id] && <p className="text-sm text-destructive">{errors[q.id]}</p>}
+            {errors[q.id] && <p className="text-sm text-destructive">{p(errors[q.id])}</p>}
           </fieldset>
         </Card>
       ))}
 
       <ErrorText>{error}</ErrorText>
       {!isOwner && (
-        <Button className="w-full" disabled={loading}>{loading ? 'กำลังส่ง…' : `ส่งคำตอบ รับ ${form.rewardPerResponse} Coin`}</Button>
+        <Button className="w-full" disabled={loading}>{loading ? t('Submitting…', 'กำลังส่ง…') : t(`Submit and get ${form.rewardPerResponse} Coin`, `ส่งคำตอบ รับ ${form.rewardPerResponse} Coin`)}</Button>
       )}
-      {isOwner && <Button type="button" variant="outline" className="w-full" onClick={() => router.push(`/surveys/${id}/results`)}>ไปหน้าผลลัพธ์</Button>}
+      {isOwner && <Button type="button" variant="outline" className="w-full" onClick={() => router.push(`/surveys/${id}/results`)}>{t('Go to results', 'ไปหน้าผลลัพธ์')}</Button>}
     </form>
   );
 }
 
 function Back({ id }: { id: string }) {
-  return <Link href={`/surveys/${id}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />กลับไปหน้าแบบสอบถาม</Link>;
+  const { t } = useT();
+  return <Link href={`/surveys/${id}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />{t('Back to the survey', 'กลับไปหน้าแบบสอบถาม')}</Link>;
 }

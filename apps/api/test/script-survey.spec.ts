@@ -4,9 +4,11 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { assertLedgerInvariant, balanceOf, createTestApp, makeUser, resetDb } from './helpers';
 
 const inDays = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString();
-const PREFILL = 'https://docs.google.com/forms/d/e/1FAIpQLSf_test-Form/viewform?usp=pp_url&entry.1111=ไม่เกี่ยว&entry.2222=TEMBO';
+/** ผู้สร้างวางลิงก์ Google Form ธรรมดา — สคริปต์เพิ่มช่องรหัสแล้วส่งลิงก์กรอกล่วงหน้ามาตอน ping */
+const FORM = 'https://forms.gle/AbCdEf123';
+const PREFILL = 'https://docs.google.com/forms/d/e/1FAIpQLSf_test-Form/viewform?usp=pp_url&entry.2222=TEMBO';
 const base = {
-  title: 'การเรียนรู้ในมหาวิทยาลัย 2026', description: 'ช่วยตอบหน่อย', mode: 'EXTERNAL', externalVerify: 'SCRIPT', externalUrl: PREFILL,
+  title: 'การเรียนรู้ในมหาวิทยาลัย 2026', description: 'ช่วยตอบหน่อย', mode: 'EXTERNAL', externalVerify: 'SCRIPT', externalUrl: FORM,
   externalQuestionCount: 8, rewardPerResponse: 5, quota: 3, closesAt: inDays(7), ownerContribution: 15,
   category: 'EDUCATION', estMinutes: 5, tags: ['การศึกษา'],
 };
@@ -28,12 +30,15 @@ describe('แบบสอบถาม Google Form + สคริปต์ส่�
     return { owner, s, secret: s.script.secret as string };
   }
 
-  it('ลิงก์ต้องเป็นลิงก์กรอกล่วงหน้าที่มีคำว่า TEMBO', async () => {
+  it('รับลิงก์ Google Form ทั่วไป (ไม่ต้องมีคำว่า TEMBO) แต่ไม่รับลิงก์อื่น — ข้อความ error ตามภาษา', async () => {
     const { agent } = await makeUser(app);
-    await agent.post('/surveys').send({ ...base, externalUrl: 'https://forms.gle/abc' }).expect(400);
-    await agent.post('/surveys').send({ ...base, externalUrl: PREFILL.replace('=TEMBO', '=xx') }).expect(400);
+    const en = await makeUser(app, { lang: 'en' });
+    const bad = await agent.post('/surveys').send({ ...base, externalUrl: 'https://example.com/form' }).expect(400);
+    expect(bad.body.message).toBe('กรุณากรอกลิงก์ Google Form ของคุณ');
+    expect((await en.agent.post('/surveys').send({ ...base, externalUrl: 'https://example.com/form' }).expect(400)).body.message).toBe('Please enter your Google Form link');
+    await agent.post('/surveys').send({ ...base, externalUrl: 'https://docs.google.com/forms/d/1abcDEF/edit' }).expect(201);
     const s = (await agent.post('/surveys').send(base).expect(201)).body;
-    expect(s).toMatchObject({ externalVerify: 'SCRIPT', category: 'EDUCATION', estMinutes: 5, completionCode: null, externalUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSf_test-Form/viewform' });
+    expect(s).toMatchObject({ externalVerify: 'SCRIPT', category: 'EDUCATION', estMinutes: 5, completionCode: null, externalUrl: FORM });
     expect(s.script).toMatchObject({ endpoint: expect.stringContaining(`/api/hooks/forms/${s.id}`), connectedAt: null });
   });
 
@@ -51,7 +56,8 @@ describe('แบบสอบถาม Google Form + สคริปต์ส่�
 
   it('รางวัลเท่ากัน: เริ่ม → ได้รหัสในลิงก์ → ฟอร์มส่งผล → ได้ Coin ทันที (ส่งซ้ำไม่จ่ายซ้ำ)', async () => {
     const { s, secret } = await setup();
-    await hook(s.id, { secret, ping: true }).expect(200);
+    // ping ตอนติดตั้งพร้อมลิงก์กรอกล่วงหน้า → TEMBO รู้ว่าช่องรหัสคือ entry.2222
+    await hook(s.id, { secret, ping: true, prefillUrl: PREFILL }).expect(200);
     const u = await makeUser(app, { balance: 0 });
     const st = (await u.agent.post(`/surveys/${s.id}/start`).expect(200)).body;
     expect(st.code).toMatch(/^TB[A-Z0-9]{8}$/);

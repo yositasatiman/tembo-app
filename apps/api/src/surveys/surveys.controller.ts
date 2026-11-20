@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { langOf } from '../common/i18n';
 import {
   CreateSurveyInput, createSurveySchema, FormHookInput, formHookSchema, ReviewSubsidyInput, reviewSubsidySchema,
   SponsorSurveyInput, sponsorSurveySchema, SubmitAnswersInput, submitAnswersSchema, VerifyExternalInput, verifyExternalSchema,
@@ -78,8 +79,8 @@ export class SurveysController {
 
   @Get(':id/results.csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  async csv(@CurrentUser() u: AuthUser, @Param('id') id: string, @Res({ passthrough: true }) res: Response) {
-    const { filename, content } = await this.surveys.csv(id, u);
+  async csv(@CurrentUser() u: AuthUser, @Param('id') id: string, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const { filename, content } = await this.surveys.csv(id, u, langOf(req));
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return content;
   }
