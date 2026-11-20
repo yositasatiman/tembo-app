@@ -18,6 +18,7 @@ import { PrismaModule } from './prisma/prisma.service';
 import { AdminController, SurveysController } from './surveys/surveys.controller';
 import { SurveysService } from './surveys/surveys.service';
 import { AdminRewardsController, RewardsController, RewardsService } from './rewards/rewards';
+import { AdminCoinsController, AdminCoinsService } from './users/admin-coins';
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
 
@@ -32,10 +33,10 @@ class HealthController {
     JwtModule.registerAsync({ global: true, useFactory: () => ({ secret: config.jwtSecret }) }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, SurveysController, AdminController, EventsController, AdminEventsController, FeedController, NotificationsController, RewardsController, AdminRewardsController],
+  controllers: [HealthController, AuthController, UsersController, SurveysController, AdminController, EventsController, AdminEventsController, FeedController, NotificationsController, RewardsController, AdminRewardsController, AdminCoinsController],
   providers: [
     { provide: APP_GUARD, useClass: ClientThrottlerGuard },
-    AuthGuard, RolesGuard, AuthService, OtpService, UsersService, LedgerService, MailService, SurveysService, EventsService, FeedService, NotificationsService, RewardsService,
+    AuthGuard, RolesGuard, AuthService, OtpService, UsersService, LedgerService, MailService, SurveysService, EventsService, FeedService, NotificationsService, RewardsService, AdminCoinsService,
   ],
 })
 export class AppModule {}

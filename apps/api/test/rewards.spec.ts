@@ -78,3 +78,23 @@ describe('ร้านรางวัล', () => {
     await assertLedgerInvariant(prisma);
   });
 });
+
+describe('แอดมินเพิ่ม Coin ทดสอบ', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  beforeAll(async () => { ({ app, prisma } = await createTestApp()); });
+  beforeEach(async () => resetDb(prisma));
+  afterAll(async () => app.close());
+
+  it('เพิ่มด้วยอีเมล @cmu.ac.th ได้, ผู้ใช้ทั่วไปเพิ่มไม่ได้', async () => {
+    const admin = await makeUser(app, { role: 'ADMIN', balance: 0 });
+    const u = await makeUser(app, { balance: 0 });
+    const res = await admin.agent.post('/admin/coins/grant').send({ email: u.user.cmuEmail!.toUpperCase(), amount: 5000, memo: 'ทดสอบระบบ' }).expect(200);
+    expect(res.body.balance).toBe(5000);
+    await u.agent.post('/admin/coins/grant').send({ email: u.user.email, amount: 10, memo: 'x' }).expect(403);
+    await admin.agent.post('/admin/coins/grant').send({ email: 'nobody@cmu.ac.th', amount: 10, memo: 'x' }).expect(404);
+    const w = (await u.agent.get('/me/wallet').expect(200)).body;
+    expect(w.entries[0]).toMatchObject({ type: 'ADMIN_ADJUST', delta: 5000 });
+    await assertLedgerInvariant(prisma);
+  });
+});

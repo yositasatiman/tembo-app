@@ -585,3 +585,11 @@ export interface RedemptionItem {
 export interface AdminRedemptionItem extends RedemptionItem {
   user: { displayName: string | null; email: string; cmuEmail: string | null; faculty: string | null };
 }
+
+// ───────────────────────── แอดมิน: เพิ่ม Coin ทดสอบ ─────────────────────────
+export const grantCoinSchema = z.object({
+  email: z.string().trim().toLowerCase().email('อีเมลไม่ถูกต้อง'),
+  amount: z.coerce.number().int().min(1).max(100_000, 'เพิ่มได้ครั้งละไม่เกิน 100,000 Coin'),
+  memo: z.string().trim().min(1, 'กรุณาใส่เหตุผล').max(120),
+});
+export type GrantCoinInput = z.infer<typeof grantCoinSchema>;

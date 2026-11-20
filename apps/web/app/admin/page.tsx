@@ -7,6 +7,7 @@ import { EVENT_CATEGORY_LABEL, type EventCategory } from '@tembo/shared';
 import { Button, Card, ErrorText, fmtDate, SectionHeader } from '@/components/ui';
 import { eventTimeShort } from '@/components/event/util';
 import { AdminRewards } from './rewards';
+import { GrantCoins } from './grant-coins';
 
 interface Pending {
   id: string; title: string; description: string | null; questionCount: number; rewardPerResponse: number;
@@ -32,6 +33,7 @@ export default function AdminPage() {
         <AdminEvents />
         <Admin />
         <AdminRewards />
+        <GrantCoins />
       </div>
     </AppShell>
   );
