@@ -108,10 +108,12 @@ export interface SurveyQuote {
 }
 
 /** คำนวณค่าใช้จ่ายของแบบสอบถาม — ใช้ทั้งหน้าเว็บ (แสดงผล) และ API (ตัดสินจริง) */
-export function quoteSurvey(i: { questionCount: number; rewardPerResponse: number; quota: number; isFirstPost: boolean; withSubsidy: boolean }): SurveyQuote | null {
+export function quoteSurvey(i: { questionCount: number; rewardPerResponse: number; quota: number; isFirstPost: boolean; withSubsidy: boolean; prizes?: number[] }): SurveyQuote | null {
   const band = surveyBand(i.questionCount);
   if (!band) return null;
-  const targetPool = i.rewardPerResponse * i.quota;
+  const draw = !!i.prizes?.length;
+  // สุ่มจับรางวัล: ยอดรวม = ผลรวมรางวัลทุกอันดับ และต้องลงครบตั้งแต่แรก (ไม่รอเพื่อนเติม)
+  const targetPool = draw ? i.prizes!.reduce((a, b) => a + b, 0) : i.rewardPerResponse * i.quota;
   const subsidyAmount = i.withSubsidy ? subsidyFor(targetPool) : 0;
   return {
     band,
@@ -119,7 +121,7 @@ export function quoteSurvey(i: { questionCount: number; rewardPerResponse: numbe
     postFee: i.isFirstPost ? 0 : band.postFee,
     subsidyAmount,
     maxOwnerContribution: targetPool - subsidyAmount,
-    minOwnerContribution: Math.min(i.rewardPerResponse, targetPool - subsidyAmount),
+    minOwnerContribution: draw ? targetPool - subsidyAmount : Math.min(i.rewardPerResponse, targetPool - subsidyAmount),
   };
 }
 
@@ -228,6 +230,50 @@ export const EXTERNAL_SURVEY_RULES = {
   MAX_ATTEMPTS: 5,
 } as const;
 
+/** หมวดของแบบสอบถาม (Figma: Create Information → Category) */
+export const SURVEY_CATEGORIES = {
+  EDUCATION: 'การศึกษา', HEALTH: 'สุขภาพ', TECHNOLOGY: 'เทคโนโลยี', SOCIAL: 'สังคมและพฤติกรรม',
+  BUSINESS: 'ธุรกิจและการตลาด', ENVIRONMENT: 'สิ่งแวดล้อม', ARTS: 'ศิลปะและการออกแบบ', OTHER: 'อื่น ๆ',
+} as const;
+export type SurveyCategory = keyof typeof SURVEY_CATEGORIES;
+const CATEGORY_KEYS = Object.keys(SURVEY_CATEGORIES) as [SurveyCategory, ...SurveyCategory[]];
+
+/** เวลาทำโดยประมาณ — เก็บค่าสูงสุดของช่วงเป็นนาที */
+export const EST_MINUTES = [
+  { value: 3, label: 'ไม่เกิน 3 นาที' }, { value: 5, label: '3–5 นาที' }, { value: 10, label: '5–10 นาที' },
+  { value: 15, label: '10–15 นาที' }, { value: 30, label: '15–30 นาที' }, { value: 60, label: 'มากกว่า 30 นาที' },
+] as const;
+export const estMinutesLabel = (m: number | null | undefined) => EST_MINUTES.find((e) => e.value === m)?.label ?? null;
+
+export const STUDY_YEARS = [1, 2, 3, 4, 5, 6] as const;
+
+export const REWARD_MODES = ['EQUAL', 'DRAW'] as const;
+export type RewardMode = (typeof REWARD_MODES)[number];
+export const REWARD_MODE_LABEL: Record<RewardMode, string> = { EQUAL: 'ทุกคนได้เท่ากัน', DRAW: 'สุ่มจับรางวัล' };
+export const DRAW_RULES = { MAX_PRIZES: 10, MAX_PRIZE: 10_000 } as const;
+
+/** วิธีตรวจว่าส่งฟอร์มภายนอกแล้ว: CODE = รหัสเดียวหน้าขอบคุณ (แบบเก่า), SCRIPT = Apps Script ส่งผลอัตโนมัติ */
+export const EXTERNAL_VERIFY = ['CODE', 'SCRIPT'] as const;
+export type ExternalVerify = (typeof EXTERNAL_VERIFY)[number];
+
+/** คำที่ผู้สร้างพิมพ์ในช่อง "รหัส TEMBO" ตอนสร้างลิงก์กรอกล่วงหน้า */
+export const PREFILL_PLACEHOLDER = 'TEMBO';
+/** รหัส TEMBO เฉพาะผู้ตอบ เช่น TB7K2M9QXA */
+export const TEMBO_CODE_RE = /^TB[A-Z0-9]{8}$/;
+
+/**
+ * แยกลิงก์กรอกล่วงหน้าของ Google Form → ลิงก์ฟอร์ม + ชื่อช่อง entry ของคำถามรหัส TEMBO
+ * รองรับ https://docs.google.com/forms/d/e/<id>/viewform?usp=pp_url&entry.123=TEMBO
+ */
+export function parseGoogleFormPrefill(raw: string): { formUrl: string; entryId: string } | null {
+  let u: URL;
+  try { u = new URL(raw.trim()); } catch { return null; }
+  if (u.protocol !== 'https:' || u.hostname !== 'docs.google.com' || !/^\/forms\/(u\/\d+\/)?d\/(e\/)?[\w-]+\/viewform$/.test(u.pathname)) return null;
+  const entry = [...u.searchParams.entries()].find(([k, v]) => /^entry\.\d+$/.test(k) && v.trim().toUpperCase() === PREFILL_PLACEHOLDER);
+  if (!entry) return null;
+  return { formUrl: `${u.origin}${u.pathname}`, entryId: entry[0] };
+}
+
 export const createSurveySchema = z.object({
   title: z.string().trim().min(3, 'ชื่ออย่างน้อย 3 ตัวอักษร').max(150),
   description: z.string().trim().max(2000).optional(),
@@ -243,7 +289,28 @@ export const createSurveySchema = z.object({
   closesAt: z.coerce.date(),
   ownerContribution: z.number().int().min(0),
   requestSubsidy: z.boolean().default(false),
+  category: z.enum(CATEGORY_KEYS).optional(),
+  estMinutes: z.number().int().refine((m) => EST_MINUTES.some((e) => e.value === m), 'เลือกเวลาทำจากรายการ').optional(),
+  eligibleFaculties: z.array(z.enum(FACULTIES)).max(FACULTIES.length).default([]),
+  eligibleYears: z.array(z.number().int().min(1).max(8)).max(8).default([]),
+  rewardMode: z.enum(REWARD_MODES).default('EQUAL'),
+  /** DRAW: รางวัลอันดับ 1, 2, 3, … */
+  prizes: z.array(z.number().int().min(1).max(DRAW_RULES.MAX_PRIZE)).max(DRAW_RULES.MAX_PRIZES, `ไม่เกิน ${DRAW_RULES.MAX_PRIZES} รางวัล`).default([]),
+  /** EXTERNAL: วิธีตรวจการส่ง */
+  externalVerify: z.enum(EXTERNAL_VERIFY).default('CODE'),
 }).superRefine((v, ctx) => {
+  if (v.mode === 'EXTERNAL' && v.externalVerify === 'SCRIPT' && v.externalUrl && !parseGoogleFormPrefill(v.externalUrl)) {
+    ctx.addIssue({ code: 'custom', path: ['externalUrl'], message: `ใช้ลิงก์กรอกล่วงหน้าของ Google Form ที่ใส่คำว่า ${PREFILL_PLACEHOLDER} ในช่องรหัส` });
+  }
+  if (v.rewardMode === 'DRAW') {
+    const band = surveyBand(surveyQuestionCount(v));
+    if (!v.prizes.length) ctx.addIssue({ code: 'custom', path: ['prizes'], message: 'ใส่รางวัลอย่างน้อย 1 รางวัล' });
+    if (v.prizes.length > v.quota) ctx.addIssue({ code: 'custom', path: ['prizes'], message: 'จำนวนรางวัลต้องไม่เกินจำนวนผู้ตอบ' });
+    if (band && v.prizes.some((p) => p < band.minReward)) ctx.addIssue({ code: 'custom', path: ['prizes'], message: `แต่ละรางวัลต้องอย่างน้อย ${band.minReward} Coin` });
+    if (v.rewardPerResponse !== Math.max(0, ...v.prizes)) ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: 'rewardPerResponse ต้องเท่ากับรางวัลสูงสุด' });
+  } else if (v.prizes.length) {
+    ctx.addIssue({ code: 'custom', path: ['prizes'], message: 'ใส่รางวัลรายอันดับเฉพาะแบบสุ่มจับรางวัล' });
+  }
   if (v.mode === 'IN_APP' && v.questions.length < 1) ctx.addIssue({ code: 'custom', path: ['questions'], message: 'ต้องมีอย่างน้อย 1 คำถาม' });
   if (v.mode === 'EXTERNAL') {
     if (!v.externalUrl) ctx.addIssue({ code: 'custom', path: ['externalUrl'], message: 'ใส่ลิงก์แบบสอบถาม' });
@@ -271,7 +338,13 @@ export function surveyQuestionCount(v: { mode?: SurveyMode; questions: unknown[]
 
 export const verifyExternalSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{4,12}$/, 'รหัสยืนยันไม่ถูกต้อง') });
 export type VerifyExternalInput = z.infer<typeof verifyExternalSchema>;
-export interface ExternalStartResponse { url: string; refCode: string; startedAt: string; canVerifyAt: string; attemptsLeft: number }
+export interface ExternalStartResponse {
+  url: string; refCode: string; startedAt: string; canVerifyAt: string; attemptsLeft: number;
+  /** SCRIPT: รหัส TEMBO ของผู้ตอบ (ใส่ในฟอร์มให้แล้วถ้ามีลิงก์กรอกล่วงหน้า) */
+  code: string | null;
+  /** SCRIPT: Google Form แจ้งว่าส่งแล้วเมื่อ */
+  submittedAt: string | null;
+}
 
 export const sponsorSurveySchema = z.object({ amount: coin(100_000) });
 export const reviewSubsidySchema = z.object({ approve: z.boolean(), note: z.string().trim().max(500).optional() });
@@ -305,6 +378,13 @@ export interface SurveySummary {
   /** ผู้ดูบันทึกไว้หรือไม่ */
   saved: boolean;
   createdAt: string;
+  category: SurveyCategory | null;
+  estMinutes: number | null;
+  eligibleFaculties: string[];
+  eligibleYears: number[];
+  rewardMode: RewardMode;
+  prizes: number[];
+  externalVerify: ExternalVerify | null;
 }
 
 export interface SurveyDetail extends SurveySummary {
@@ -331,6 +411,12 @@ export interface SurveyDetail extends SurveySummary {
   completionCode: string | null;
   /** EXTERNAL: ผู้ตอบเริ่มแล้วหรือยัง */
   myStart: ExternalStartResponse | null;
+  /** SCRIPT: เฉพาะผู้โพสต์ — ใช้ติดตั้ง Apps Script ใน Google Form */
+  script: { endpoint: string; secret: string; connectedAt: string | null } | null;
+  /** DRAW: สุ่มแล้วเมื่อ / อันดับที่ผู้ดูได้ (null = ไม่ได้รางวัลหรือยังไม่สุ่ม) / ผลรางวัลทุกอันดับ */
+  drawnAt: string | null;
+  myPrizeRank: number | null;
+  winners: { rank: number; prize: number; name: string | null }[];
 }
 
 export interface SurveyQuoteResponse { isFirstPost: boolean; subsidy: { eligible: boolean; reason: string | null; remainingSlots: number } }
@@ -530,7 +616,7 @@ export interface WalletResponse { balance: number; earned: number; spent: number
 
 export type NotificationType = 'EVENT_APPROVED' | 'EVENT_REJECTED' | 'EVENT_CANCELLED' | 'WAITLIST_PROMOTED'
   | 'SUBSIDY_APPROVED' | 'SUBSIDY_REJECTED' | 'SURVEY_SPONSORED' | 'SURVEY_CLOSED'
-  | 'REWARD_FULFILLED' | 'REWARD_CANCELLED';
+  | 'REWARD_FULFILLED' | 'REWARD_CANCELLED' | 'SURVEY_REWARDED' | 'SURVEY_PRIZE_WON' | 'SURVEY_CONNECTED';
 export interface NotificationItem { id: string; type: NotificationType; title: string; body: string; link: string | null; read: boolean; createdAt: string }
 export interface NotificationList { items: NotificationItem[]; unread: number; nextBefore: string | null }
 
@@ -593,3 +679,12 @@ export const grantCoinSchema = z.object({
   memo: z.string().trim().min(1, 'กรุณาใส่เหตุผล').max(120),
 });
 export type GrantCoinInput = z.infer<typeof grantCoinSchema>;
+
+/** Apps Script ส่งผลการส่งฟอร์มมา (ไม่ต้องล็อกอิน — ตรวจด้วย secret ของแบบสอบถาม) */
+export const formHookSchema = z.object({
+  secret: z.string().min(16).max(128),
+  ping: z.boolean().optional(),
+  /** ข้อความทุกช่องที่เป็นรูปแบบรหัส TEMBO ในคำตอบที่ส่ง */
+  codes: z.array(z.string().trim().toUpperCase()).max(20).default([]),
+});
+export type FormHookInput = z.infer<typeof formHookSchema>;

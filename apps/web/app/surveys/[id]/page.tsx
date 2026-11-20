@@ -1,11 +1,12 @@
 'use client';
 import { FormEvent, use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, BarChart3, CalendarDays, CheckCircle2, Coins, Eye, HandCoins, ListChecks, Lock, Users } from 'lucide-react';
-import type { SurveyDetail } from '@tembo/shared';
+import { ArrowLeft, BarChart3, CalendarDays, CheckCircle2, Clock3, Coins, Eye, Gift, HandCoins, ListChecks, Lock, Shapes, Trophy, UserCheck, Users } from 'lucide-react';
+import { estMinutesLabel, SURVEY_CATEGORIES, type SurveyDetail } from '@tembo/shared';
 import { api, ApiError, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
 import { ExternalOwnerSetup, ExternalRespond } from '@/components/survey/external';
+import { ScriptOwnerSetup, ScriptRespond } from '@/components/survey/script';
 import { Badge, Button, buttonCls, Card, ErrorText, fmtDate, inputCls, Notice, Progress, Spinner, StatusBadge } from '@/components/ui';
 
 export default function SurveyPage({ params }: { params: Promise<{ id: string }> }) {
@@ -48,7 +49,7 @@ function SurveyView({ id }: { id: string }) {
             <h1 className="text-xl leading-snug font-extrabold">{s.title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{s.ownerName ?? 'ไม่ระบุชื่อ'}{s.ownerFaculty && ` · คณะ${s.ownerFaculty}`}</p>
           </div>
-          <Badge tone="solid" className="px-3 py-1 text-sm"><Coins />{s.rewardPerResponse} Coin / คน</Badge>
+          <Badge tone="solid" className="px-3 py-1 text-sm">{s.rewardMode === 'DRAW' ? <><Gift />ลุ้นสูงสุด {s.rewardPerResponse} Coin</> : <><Coins />{s.rewardPerResponse} Coin / คน</>}</Badge>
         </div>
         {s.description && <p className="whitespace-pre-line text-sm leading-relaxed">{s.description}</p>}
         <div className="space-y-2">
@@ -61,19 +62,31 @@ function SurveyView({ id }: { id: string }) {
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground [&_svg]:size-3.5">
           <span className="flex items-center gap-1.5"><CalendarDays />ปิด {fmtDate(s.closesAt)}</span>
           <span className="flex items-center gap-1.5"><ListChecks />{s.questionCount} ข้อ</span>
-          <span className="flex items-center gap-1.5"><Users />รับรางวัลได้อีก {s.payableResponses} คน</span>
+          <span className="flex items-center gap-1.5"><Users />{s.rewardMode === 'DRAW' ? `รับอีก ${s.payableResponses} คน` : `รับรางวัลได้อีก ${s.payableResponses} คน`}</span>
+          {s.category && <span className="flex items-center gap-1.5"><Shapes />{SURVEY_CATEGORIES[s.category]}</span>}
+          {s.estMinutes && <span className="flex items-center gap-1.5"><Clock3 />{estMinutesLabel(s.estMinutes)}</span>}
+          {(s.eligibleFaculties.length > 0 || s.eligibleYears.length > 0) && (
+            <span className="flex items-center gap-1.5"><UserCheck />
+              {[s.eligibleFaculties.length ? `คณะ${s.eligibleFaculties.join(', ')}` : null, s.eligibleYears.length ? `ปี ${s.eligibleYears.join(', ')}` : null].filter(Boolean).join(' · ')}
+            </span>
+          )}
         </div>
       </Card>
 
       {msg && <Notice tone="success">{msg}</Notice>}
 
-      {s.isOwner && s.mode === 'EXTERNAL' && s.status !== 'CLOSED' && <ExternalOwnerSetup s={s} />}
+      {s.isOwner && s.status !== 'CLOSED' && s.externalVerify === 'CODE' && <ExternalOwnerSetup s={s} />}
+      {s.isOwner && s.status !== 'CLOSED' && s.externalVerify === 'SCRIPT' && <ScriptOwnerSetup s={s} reload={load} />}
 
-      {!s.isOwner && s.status !== 'CLOSED' && s.mode === 'EXTERNAL' && s.canRespond && (
+      {!s.isOwner && s.externalVerify === 'SCRIPT' && (s.hasResponded || (s.status !== 'CLOSED' && s.canRespond)) && <ScriptRespond s={s} reload={() => { load(); reloadMe(); }} />}
+
+      {!s.isOwner && s.status !== 'CLOSED' && s.externalVerify === 'CODE' && s.canRespond && (
         <ExternalRespond s={s} onDone={(r) => done(`ยืนยันการตอบแล้ว ได้รับ ${r} Coin`)} />
       )}
 
-      {!s.isOwner && s.status !== 'CLOSED' && (s.mode === 'IN_APP' || !s.canRespond) && (
+      {s.rewardMode === 'DRAW' && <DrawCard s={s} />}
+
+      {!s.isOwner && s.status !== 'CLOSED' && (s.externalVerify !== 'SCRIPT' ? (s.mode === 'IN_APP' || !s.canRespond) : (!s.canRespond && !s.hasResponded)) && (
         <Card className="space-y-3">
           <h3 className="font-extrabold">ตอบแบบสอบถาม</h3>
           {s.hasResponded ? <p className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4" />คุณตอบแล้ว</p>
@@ -162,6 +175,30 @@ function CloseCard({ s, onDone }: { s: SurveyDetail; onDone: (m: string) => void
     <Card className="space-y-2">
       <Button variant="danger" className="w-full" onClick={close}>ปิดรับแบบสอบถาม</Button>
       <ErrorText>{error}</ErrorText>
+    </Card>
+  );
+}
+
+/** สุ่มจับรางวัล: รางวัลแต่ละอันดับ + ผลหลังสุ่ม */
+function DrawCard({ s }: { s: SurveyDetail }) {
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-2 font-extrabold"><Trophy className="size-4 text-warning" />สุ่มจับรางวัล</h3>
+        <span className="text-xs text-muted-foreground">{s.drawnAt ? `สุ่มแล้ว ${fmtDate(s.drawnAt)}` : 'สุ่มตอนปิดแบบสอบถาม'}</span>
+      </div>
+      <ul className="divide-y divide-border rounded-2xl bg-lavender-soft/60 px-3">
+        {s.prizes.map((p, i) => {
+          const w = s.winners.find((x) => x.rank === i + 1);
+          return (
+            <li key={i} className="flex items-center justify-between py-2.5 text-sm">
+              <span className="font-bold">อันดับ {i + 1}{w && <span className="ml-2 font-normal text-muted-foreground">{w.name ?? 'ผู้ตอบ'}{s.myPrizeRank === i + 1 ? ' (คุณ)' : ''}</span>}</span>
+              <span className="flex items-center gap-1 font-extrabold"><Coins className="size-4 text-warning" />{p.toLocaleString()}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-xs text-muted-foreground">ทุกคนที่ส่งแบบสอบถามมีโอกาสเท่ากัน ไม่ต้องแข่งกันตอบเร็ว · ถ้าผู้ตอบน้อยกว่าจำนวนรางวัล รางวัลที่เหลือคืนผู้ลง Coin</p>
     </Card>
   );
 }

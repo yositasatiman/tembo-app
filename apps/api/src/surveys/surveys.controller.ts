@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Res, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import {
-  CreateSurveyInput, createSurveySchema, ReviewSubsidyInput, reviewSubsidySchema,
+  CreateSurveyInput, createSurveySchema, FormHookInput, formHookSchema, ReviewSubsidyInput, reviewSubsidySchema,
   SponsorSurveyInput, sponsorSurveySchema, SubmitAnswersInput, submitAnswersSchema, VerifyExternalInput, verifyExternalSchema,
 } from '@tembo/shared';
 import { AuthGuard, AuthUser, CurrentUser, Roles, RolesGuard } from '../common/auth';
@@ -99,4 +100,15 @@ export class AdminController {
     await this.surveys.reviewSubsidy(u.id, id, body.approve, body.note);
     return { ok: true };
   }
+}
+
+/** Apps Script ใน Google Form ของผู้โพสต์เรียกเมื่อมีคนกดส่ง — ไม่ต้องล็อกอิน ตรวจด้วย secret ของแบบสอบถาม */
+@Controller('hooks/forms')
+export class FormHookController {
+  constructor(private readonly surveys: SurveysService) {}
+
+  @Post(':id')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 600 } })
+  hook(@Param('id') id: string, @Body(new ZodPipe(formHookSchema)) body: FormHookInput) { return this.surveys.formHook(id, body); }
 }

@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Ban, Bell, CalendarCheck, CalendarX, CheckCheck, ClipboardCheck, Gift, PackageX, HandCoins, Hourglass, ShieldCheck, ShieldX } from 'lucide-react';
+import { Ban, Bell, CalendarCheck, CalendarX, CheckCheck, ClipboardCheck, Coins, Gift, PackageX, Plug, Trophy, HandCoins, Hourglass, ShieldCheck, ShieldX } from 'lucide-react';
 import type { NotificationItem, NotificationList, NotificationType } from '@tembo/shared';
 import { api, post } from '@/lib/api';
 import { announceUnread, AppShell } from '@/components/shell';
@@ -18,6 +18,9 @@ const ICON: Record<NotificationType, [React.ReactNode, string]> = {
   SURVEY_CLOSED: [<ClipboardCheck key="i" />, 'bg-lavender-soft text-primary'],
   REWARD_FULFILLED: [<Gift key="i" />, 'bg-success-soft text-success'],
   REWARD_CANCELLED: [<PackageX key="i" />, 'bg-destructive-soft text-destructive'],
+  SURVEY_REWARDED: [<Coins key="i" />, 'bg-coin-soft text-warning'],
+  SURVEY_PRIZE_WON: [<Trophy key="i" />, 'bg-coin-soft text-warning'],
+  SURVEY_CONNECTED: [<Plug key="i" />, 'bg-success-soft text-success'],
 };
 
 function ago(iso: string) {

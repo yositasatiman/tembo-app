@@ -155,7 +155,7 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
     expect((await nonCmu.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(400)).body.message).toMatch(/cmu\.ac\.th/);
 
     const a = await makeUser(app, { balance: 0 });
-    expect((await a.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(200)).body).toEqual({ reward: 10, balance: 10 });
+    expect((await a.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(200)).body).toEqual({ reward: 10, entered: false, balance: 10 });
     await a.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(409);
     const b = await makeUser(app);
     await b.agent.post(`/surveys/${s.id}/responses`).send({ answers: await ans(s.id) }).expect(200);

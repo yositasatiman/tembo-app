@@ -68,7 +68,7 @@ describe('Surveys: คำถาม / แบบฟอร์ม / ผลลัพ�
     expect(await prisma.surveyResponse.count()).toBe(0);
 
     const ok = await send({ [ids[0]]: 1, [ids[1]]: [2, 0, 2], [ids[2]]: 4, [ids[3]]: '  วิศวะ  ', [ids[4]]: '' }).expect(200);
-    expect(ok.body).toEqual({ reward: 5, balance: 5 });
+    expect(ok.body).toEqual({ reward: 5, entered: false, balance: 5 });
     const saved = await prisma.surveyResponse.findFirstOrThrow();
     expect(saved.answers).toEqual({ [ids[0]]: 1, [ids[1]]: [0, 2], [ids[2]]: 4, [ids[3]]: 'วิศวะ' });
   });

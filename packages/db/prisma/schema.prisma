@@ -58,6 +58,13 @@ enum SurveyMode {
   EXTERNAL
 }
 
+enum SurveyRewardMode {
+  /// ทุกคนที่ตอบได้ rewardPerResponse เท่ากัน ทันทีที่ส่ง
+  EQUAL
+  /// ผู้ตอบได้สิทธิ์ลุ้น ระบบสุ่มผู้ได้รางวัลตาม prizes ตอนปิดแบบสอบถาม
+  DRAW
+}
+
 enum SubsidyStatus {
   NONE
   PENDING
@@ -100,6 +107,9 @@ enum NotificationType {
   SURVEY_CLOSED
   REWARD_FULFILLED
   REWARD_CANCELLED
+  SURVEY_REWARDED
+  SURVEY_PRIZE_WON
+  SURVEY_CONNECTED
 }
 
 enum QuestionType {
@@ -218,38 +228,54 @@ model LedgerEntry {
 
 /// แบบสอบถามงานวิจัย (ขั้นที่ 2: ส่วนเศรษฐกิจ Coin — คำถาม/คำตอบจริงเพิ่มในขั้นที่ 3)
 model Survey {
-  id                String        @id @default(cuid())
-  ownerId           String
-  owner             User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  title             String
-  description       String?
+  id                 String           @id @default(cuid())
+  ownerId            String
+  owner              User             @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  title              String
+  description        String?
   /// หัวข้อจากรายการความสนใจ (INTERESTS) — ใช้จับคู่ฟีด
-  tags              String[]      @default([])
-  mode              SurveyMode    @default(IN_APP)
+  tags               String[]         @default([])
+  mode               SurveyMode       @default(IN_APP)
   /// ลิงก์แบบสอบถามภายนอก (mode = EXTERNAL)
-  externalUrl       String?
+  externalUrl        String?
   /// รหัสที่ผู้โพสต์ใส่ไว้ในหน้ายืนยันของฟอร์มภายนอก — ผู้ตอบกรอกรหัสนี้ใน TEMBO เพื่อรับ Coin
-  completionCode    String?
-  questionCount     Int
-  rewardPerResponse Int
-  quota             Int
+  completionCode     String?
+  /// EXTERNAL แบบใหม่: Apps Script ใน Google Form ส่งผลมาพร้อม secret นี้ (null = แบบเก่าใช้ completionCode)
+  webhookSecret      String?
+  /// สคริปต์ส่ง ping มาครั้งแรกแล้ว — ก่อนหน้านี้ยังเปิดให้ตอบไม่ได้
+  webhookConnectedAt DateTime?
+  /// ชื่อช่อง entry.xxx ของคำถาม "รหัส TEMBO" ในลิงก์กรอกล่วงหน้า
+  codeEntryId        String?
+  category           String?
+  /// เวลาทำโดยประมาณ (นาที, ค่าสูงสุดของช่วง)
+  estMinutes         Int?
+  /// ว่าง = ทุกคณะ / ทุกชั้นปี
+  eligibleFaculties  String[]         @default([])
+  eligibleYears      Int[]            @default([])
+  rewardMode         SurveyRewardMode @default(EQUAL)
+  /// DRAW: รางวัลอันดับ 1, 2, 3, … (Coin)
+  prizes             Int[]            @default([])
+  drawnAt            DateTime?
+  questionCount      Int
+  rewardPerResponse  Int
+  quota              Int
   /// ยอดรางวัลรวมที่ต้องหาให้ครบ = rewardPerResponse × quota
-  targetPool        Int
+  targetPool         Int
   /// ค่าโพสต์ที่จ่ายไปแล้ว (0 = โพสต์แรกฟรี) — ไม่คืน
-  postFee           Int
-  status            SurveyStatus
-  subsidyStatus     SubsidyStatus @default(NONE)
+  postFee            Int
+  status             SurveyStatus
+  subsidyStatus      SubsidyStatus    @default(NONE)
   /// ยอดที่ระบบจะสมทบ/สมทบแล้ว
-  subsidyAmount     Int           @default(0)
-  subsidyNote       String?
+  subsidyAmount      Int              @default(0)
+  subsidyNote        String?
   /// กระเป๋า Escrow ของแบบสอบถามนี้ (ถือ Coin รางวัลที่ยังไม่จ่าย)
-  escrowWalletId    String        @unique
-  escrowWallet      Wallet        @relation(fields: [escrowWalletId], references: [id], onDelete: Restrict)
-  responsesCount    Int           @default(0)
-  closesAt          DateTime
-  closedAt          DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  escrowWalletId     String           @unique
+  escrowWallet       Wallet           @relation(fields: [escrowWalletId], references: [id], onDelete: Restrict)
+  responsesCount     Int              @default(0)
+  closesAt           DateTime
+  closedAt           DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   contributions SurveyContribution[]
   responses     SurveyResponse[]
@@ -288,6 +314,8 @@ model SurveyResponse {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   reward    Int
+  /// DRAW: อันดับรางวัลที่สุ่มได้ (null = ไม่ได้รางวัล / ยังไม่สุ่ม)
+  prizeRank Int?
   /// คำตอบ { [questionId]: number | number[] | string } — ตรวจรูปแบบด้วย validateAnswers (@tembo/shared)
   answers   Json     @default("{}")
   createdAt DateTime @default(now())
@@ -299,11 +327,15 @@ model SurveyResponse {
 /// ผู้ใช้กดเปิดแบบสอบถามภายนอกเมื่อไร (กันกรอกรหัสทันทีโดยไม่ได้ทำ) และนับครั้งที่กรอกรหัสผิด
 model SurveyStart {
   surveyId       String
-  survey         Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  survey         Survey    @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  startedAt      DateTime @default(now())
-  failedAttempts Int      @default(0)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startedAt      DateTime  @default(now())
+  failedAttempts Int       @default(0)
+  /// รหัส TEMBO เฉพาะผู้ตอบ (แบบสอบถามแบบสคริปต์) — กรอกล่วงหน้าในฟอร์ม แล้วสคริปต์ส่งกลับมา
+  token          String?   @unique
+  /// Google Form แจ้งว่าส่งแล้ว
+  submittedAt    DateTime?
 
   @@id([surveyId, userId])
   @@index([userId])

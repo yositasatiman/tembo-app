@@ -15,7 +15,7 @@ import { NotificationsController, NotificationsService } from './notifications/n
 import { LedgerService } from './ledger/ledger.service';
 import { MailService } from './mail/mail.service';
 import { PrismaModule } from './prisma/prisma.service';
-import { AdminController, SurveysController } from './surveys/surveys.controller';
+import { AdminController, FormHookController, SurveysController } from './surveys/surveys.controller';
 import { SurveysService } from './surveys/surveys.service';
 import { AdminRewardsController, RewardsController, RewardsService } from './rewards/rewards';
 import { AdminCoinsController, AdminCoinsService } from './users/admin-coins';
@@ -33,7 +33,7 @@ class HealthController {
     JwtModule.registerAsync({ global: true, useFactory: () => ({ secret: config.jwtSecret }) }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
   ],
-  controllers: [HealthController, AuthController, UsersController, SurveysController, AdminController, EventsController, AdminEventsController, FeedController, NotificationsController, RewardsController, AdminRewardsController, AdminCoinsController],
+  controllers: [HealthController, AuthController, UsersController, SurveysController, AdminController, EventsController, AdminEventsController, FeedController, NotificationsController, RewardsController, AdminRewardsController, AdminCoinsController, FormHookController],
   providers: [
     { provide: APP_GUARD, useClass: ClientThrottlerGuard },
     AuthGuard, RolesGuard, AuthService, OtpService, UsersService, LedgerService, MailService, SurveysService, EventsService, FeedService, NotificationsService, RewardsService, AdminCoinsService,

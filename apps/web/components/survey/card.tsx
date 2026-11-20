@@ -39,7 +39,7 @@ export function SurveyCard({ s, reason, onToast }: { s: SurveySummary; reason?: 
       <h3 className="text-lg leading-snug font-extrabold"><Link href={href} className="hover:text-primary">{s.title}</Link></h3>
       {s.description && <p className="line-clamp-2 text-[13px] text-muted-foreground">{s.description}</p>}
       <div className="flex flex-wrap gap-1.5 pt-0.5 text-xs">
-        <span className="rounded-xl bg-coin-soft px-2.5 py-1.5 font-extrabold">+ {s.rewardPerResponse} Coin</span>
+        <span className="rounded-xl bg-coin-soft px-2.5 py-1.5 font-extrabold">{s.rewardMode === 'DRAW' ? `ลุ้น ${s.rewardPerResponse} Coin` : `+ ${s.rewardPerResponse} Coin`}</span>
         <span className="flex items-center gap-1 rounded-xl bg-lavender-soft px-2.5 py-1.5 text-muted-foreground"><Clock className="size-3.5" />{s.questionCount} ข้อ</span>
         <span className="flex items-center gap-1 rounded-xl bg-lavender-soft px-2.5 py-1.5 text-muted-foreground"><Users className="size-3.5" />เหลือ {s.payableResponses} ที่</span>
       </div>

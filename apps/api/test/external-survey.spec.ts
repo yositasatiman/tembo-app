@@ -63,7 +63,7 @@ describe('แบบสอบถามลิงก์ภายนอก + รห�
     expect(early.body.message).toMatch(/รออีก/);
     await age(s.id);
     const ok = (await u.agent.post(`/surveys/${s.id}/verify`).send({ code: s.completionCode.toLowerCase() }).expect(200)).body;
-    expect(ok).toEqual({ reward: 4, balance: 4 });
+    expect(ok).toEqual({ reward: 4, entered: false, balance: 4 });
     await u.agent.post(`/surveys/${s.id}/verify`).send({ code: s.completionCode }).expect(409);
 
     const csv = await owner.agent.get(`/surveys/${s.id}/results.csv`).expect(200);

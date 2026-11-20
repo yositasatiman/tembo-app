@@ -16,13 +16,16 @@ export class FeedService {
 
   async feed(viewerId: string, tab: FeedTab): Promise<FeedItem[]> {
     const [user, surveys, events] = await Promise.all([
-      this.prisma.user.findUniqueOrThrow({ where: { id: viewerId }, select: { interests: true, faculty: true } }),
+      this.prisma.user.findUniqueOrThrow({ where: { id: viewerId }, select: { interests: true, faculty: true, studyYear: true } }),
       this.surveys.list(viewerId, 100),
       this.events.list(viewerId, 'all'),
     ]);
     const now = Date.now();
     const items: (FeedItem & { relevant: boolean; at: string })[] = [
-      ...surveys.filter((s) => !s.isMine && !s.responded && s.payableResponses > 0).map((survey) => {
+      ...surveys.filter((s) => !s.isMine && !s.responded && s.payableResponses > 0
+        // ซ่อนแบบสอบถามที่จำกัดคณะ/ชั้นปีแล้วผู้ดูไม่อยู่ในกลุ่ม
+        && (!s.eligibleFaculties.length || (!!user.faculty && s.eligibleFaculties.includes(user.faculty)))
+        && (!s.eligibleYears.length || (!!user.studyYear && s.eligibleYears.includes(user.studyYear)))).map((survey) => {
         const sc = scoreFeedItem({ kind: 'survey', survey }, user, now);
         return { kind: 'survey' as const, id: survey.id, score: sc.score, reasons: sc.reasons, relevant: sc.relevant, at: survey.createdAt, survey };
       }),
