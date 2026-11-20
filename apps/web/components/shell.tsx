@@ -3,7 +3,7 @@ import { createContext, FormEvent, ReactNode, Suspense, useCallback, useContext,
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  BadgeCheck, Bell, CalendarDays, ChevronRight, ClipboardList, Coins, FileText, Home, LogOut, Menu, Search,
+  BadgeCheck, Bell, CalendarDays, ChevronRight, ClipboardList, Coins, FileText, Gift, Home, LogOut, Menu, Search,
   ShieldAlert, ShieldCheck, Ticket, UserRound,
 } from 'lucide-react';
 import type { MeResponse } from '@tembo/shared';
@@ -54,6 +54,7 @@ const MAIN_NAV = [
 const MORE_NAV = [
   { href: '/notifications', label: 'แจ้งเตือน', icon: Bell, match: (p: string) => p.startsWith('/notifications') },
   { href: '/coin', label: 'Coin', icon: Coins, match: (p: string) => p.startsWith('/coin') },
+  { href: '/rewards', label: 'ร้านรางวัล', icon: Gift, match: (p: string) => p.startsWith('/rewards') },
   { href: '/me', label: 'โปรไฟล์', icon: UserRound, match: (p: string) => p === '/me' },
 ];
 

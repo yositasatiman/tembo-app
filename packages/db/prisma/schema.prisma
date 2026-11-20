@@ -2,9 +2,9 @@
 // ขั้นที่ 2–3: แบบสอบถาม + Escrow, ขั้นที่ 4: Event
 
 generator client {
-  provider        = "prisma-client-js"
+  provider   = "prisma-client-js"
   // ใช้ query compiler (ไม่มี Rust engine) + driver adapter ของ node-postgres
-  engineType      = "client"
+  engineType = "client"
 }
 
 datasource db {
@@ -38,6 +38,10 @@ enum TxType {
   SURVEY_REWARD
   ESCROW_REFUND
   EVENT_REWARD
+  /// แลกของรางวัล (Coin ออกจากระบบ)
+  REWARD_REDEEM
+  /// คืน Coin เมื่อยกเลิกการแลก
+  REWARD_REFUND
 }
 
 enum SurveyStatus {
@@ -94,6 +98,8 @@ enum NotificationType {
   SUBSIDY_REJECTED
   SURVEY_SPONSORED
   SURVEY_CLOSED
+  REWARD_FULFILLED
+  REWARD_CANCELLED
 }
 
 enum QuestionType {
@@ -140,6 +146,7 @@ model User {
   eventHides    EventHide[]
   surveyStarts  SurveyStart[]
   notifications Notification[]
+  redemptions   RewardRedemption[]
   savedSurveys  SurveySave[]
 }
 
@@ -423,4 +430,51 @@ model SurveySave {
 
   @@id([surveyId, userId])
   @@index([userId, createdAt])
+}
+
+enum RedemptionStatus {
+  /// รอแอดมินส่งมอบ
+  PENDING
+  FULFILLED
+  /// ยกเลิกแล้ว (ผู้ใช้หรือแอดมิน) — คืน Coin และคืนสต็อก
+  CANCELLED
+}
+
+/// ของรางวัลในร้านรางวัล — แลกด้วย Coin เท่านั้น ไม่มีเงินจริงเข้าระบบ
+model Reward {
+  id           String             @id @default(cuid())
+  title        String
+  description  String
+  imageUrl     String?
+  /// ราคาเป็น Coin
+  cost         Int
+  /// จำนวนคงเหลือ
+  stock        Int
+  /// แลกได้สูงสุดกี่ครั้งต่อคน (ไม่นับที่ยกเลิก)
+  perUserLimit Int                @default(1)
+  active       Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  redemptions  RewardRedemption[]
+
+  @@index([active, cost])
+}
+
+model RewardRedemption {
+  id        String           @id @default(cuid())
+  rewardId  String
+  reward    Reward           @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  /// ราคาตอนแลก (แอดมินเปลี่ยนราคาภายหลังก็ไม่กระทบ)
+  cost      Int
+  status    RedemptionStatus @default(PENDING)
+  /// ข้อความถึงผู้ใช้ เช่น จุดรับของ หรือเหตุผลที่ยกเลิก
+  note      String?
+  decidedAt DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([rewardId, userId])
 }

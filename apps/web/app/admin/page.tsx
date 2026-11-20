@@ -6,6 +6,7 @@ import { AppShell } from '@/components/shell';
 import { EVENT_CATEGORY_LABEL, type EventCategory } from '@tembo/shared';
 import { Button, Card, ErrorText, fmtDate, SectionHeader } from '@/components/ui';
 import { eventTimeShort } from '@/components/event/util';
+import { AdminRewards } from './rewards';
 
 interface Pending {
   id: string; title: string; description: string | null; questionCount: number; rewardPerResponse: number;
@@ -26,10 +27,11 @@ export default function AdminPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-[22px] font-extrabold tracking-tight">แอดมิน</h1>
-          <p className="text-xs text-muted-foreground">ตรวจ Event ก่อนขึ้นฟีด และตรวจการขอระบบสมทบของแบบสอบถาม</p>
+          <p className="text-xs text-muted-foreground">ตรวจ Event ก่อนขึ้นฟีด ตรวจการขอระบบสมทบ และจัดการร้านรางวัล</p>
         </div>
         <AdminEvents />
         <Admin />
+        <AdminRewards />
       </div>
     </AppShell>
   );

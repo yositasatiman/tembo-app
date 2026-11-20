@@ -516,10 +516,12 @@ export function scoreFeedItem(item: { kind: 'survey'; survey: SurveySummary } | 
 
 // ───────────────────────── กระเป๋า Coin ─────────────────────────
 
-export type TxType = 'SIGNUP_BONUS' | 'ADMIN_ADJUST' | 'POST_FEE' | 'ESCROW_FUND' | 'SUBSIDY' | 'SURVEY_REWARD' | 'ESCROW_REFUND' | 'EVENT_REWARD';
+export type TxType = 'SIGNUP_BONUS' | 'ADMIN_ADJUST' | 'POST_FEE' | 'ESCROW_FUND' | 'SUBSIDY' | 'SURVEY_REWARD' | 'ESCROW_REFUND' | 'EVENT_REWARD'
+  | 'REWARD_REDEEM' | 'REWARD_REFUND';
 export const TX_LABEL: Record<TxType, string> = {
   SIGNUP_BONUS: 'โบนัสสมัครสมาชิก', ADMIN_ADJUST: 'ปรับยอดโดยแอดมิน', POST_FEE: 'ค่าโพสต์', ESCROW_FUND: 'ลง Coin รางวัล',
   SUBSIDY: 'ระบบสมทบ', SURVEY_REWARD: 'รางวัลตอบแบบสอบถาม', ESCROW_REFUND: 'คืน Coin', EVENT_REWARD: 'รางวัลเช็กอิน Event',
+  REWARD_REDEEM: 'แลกของรางวัล', REWARD_REFUND: 'คืน Coin จากการแลกของรางวัล',
 };
 export interface WalletEntry { id: string; delta: number; type: TxType; memo: string | null; createdAt: string }
 export interface WalletResponse { balance: number; earned: number; spent: number; entries: WalletEntry[]; nextBefore: string | null }
@@ -527,6 +529,59 @@ export interface WalletResponse { balance: number; earned: number; spent: number
 // ───────────────────────── แจ้งเตือน + บันทึก (ขั้นที่ 5.2) ─────────────────────────
 
 export type NotificationType = 'EVENT_APPROVED' | 'EVENT_REJECTED' | 'EVENT_CANCELLED' | 'WAITLIST_PROMOTED'
-  | 'SUBSIDY_APPROVED' | 'SUBSIDY_REJECTED' | 'SURVEY_SPONSORED' | 'SURVEY_CLOSED';
+  | 'SUBSIDY_APPROVED' | 'SUBSIDY_REJECTED' | 'SURVEY_SPONSORED' | 'SURVEY_CLOSED'
+  | 'REWARD_FULFILLED' | 'REWARD_CANCELLED';
 export interface NotificationItem { id: string; type: NotificationType; title: string; body: string; link: string | null; read: boolean; createdAt: string }
 export interface NotificationList { items: NotificationItem[]; unread: number; nextBefore: string | null }
+
+// ───────────────────────── ร้านรางวัล (ขั้นที่ 6) ─────────────────────────
+// Coin ได้จากกิจกรรมในแอปเท่านั้น แลกเป็นของรางวัลได้ แต่เติมเงินซื้อ Coin หรือแลกกลับเป็นเงินไม่ได้
+
+export const REWARD_RULES = {
+  /** ต้องยืนยันอีเมล @cmu.ac.th ก่อนแลก (กันบัญชีปลอมมาฟาร์ม Coin) */
+  REQUIRE_CMU: true,
+  MAX_COST: 100_000,
+  MAX_STOCK: 10_000,
+  MAX_PER_USER: 100,
+} as const;
+
+
+const rewardFields = {
+  title: z.string().trim().min(2, 'ชื่ออย่างน้อย 2 ตัวอักษร').max(80),
+  description: z.string().trim().min(1, 'กรุณาใส่รายละเอียดและวิธีรับของ').max(1000),
+  imageUrl: optionalUrl,
+  cost: z.coerce.number().int().min(1, 'ราคาอย่างน้อย 1 Coin').max(REWARD_RULES.MAX_COST),
+  stock: z.coerce.number().int().min(0, 'จำนวนต้องไม่ติดลบ').max(REWARD_RULES.MAX_STOCK),
+  perUserLimit: z.coerce.number().int().min(1).max(REWARD_RULES.MAX_PER_USER),
+  active: z.boolean(),
+};
+export const rewardSchema = z.object({
+  ...rewardFields, perUserLimit: rewardFields.perUserLimit.default(1), active: rewardFields.active.default(true),
+});
+export type RewardInput = z.input<typeof rewardSchema>;
+/** แก้ไข: ส่งเฉพาะช่องที่เปลี่ยน (ไม่มีค่า default เพื่อไม่ให้ทับค่าเดิม) */
+export const updateRewardSchema = z.object(rewardFields).partial();
+export type UpdateRewardInput = z.input<typeof updateRewardSchema>;
+
+export const decideRedemptionSchema = z.object({
+  action: z.enum(['FULFILL', 'CANCEL']),
+  note: z.string().trim().max(300).optional(),
+}).refine((v) => v.action === 'FULFILL' || !!v.note, { message: 'กรุณาใส่เหตุผลที่ยกเลิก', path: ['note'] });
+export type DecideRedemptionInput = z.infer<typeof decideRedemptionSchema>;
+
+export type RedemptionStatus = 'PENDING' | 'FULFILLED' | 'CANCELLED';
+export const REDEMPTION_STATUS_LABEL: Record<RedemptionStatus, string> = { PENDING: 'รอรับของ', FULFILLED: 'ได้รับแล้ว', CANCELLED: 'ยกเลิกแล้ว' };
+
+export interface RewardItem {
+  id: string; title: string; description: string; imageUrl: string | null; cost: number; stock: number;
+  perUserLimit: number; active: boolean;
+  /** จำนวนครั้งที่ผู้ใช้คนนี้แลกไปแล้ว (ไม่นับที่ยกเลิก) */
+  redeemedByMe: number;
+}
+export interface RedemptionItem {
+  id: string; status: RedemptionStatus; cost: number; note: string | null; createdAt: string; decidedAt: string | null;
+  reward: { id: string; title: string; imageUrl: string | null };
+}
+export interface AdminRedemptionItem extends RedemptionItem {
+  user: { displayName: string | null; email: string; cmuEmail: string | null; faculty: string | null };
+}

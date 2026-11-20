@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, ClipboardList, Coins, History, Sparkles } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, ClipboardList, Coins, Gift, History, Sparkles } from 'lucide-react';
 import { TX_LABEL, type WalletEntry, type WalletResponse } from '@tembo/shared';
 import { api } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
@@ -39,7 +39,7 @@ function Coin() {
         <h1 className="text-[22px] font-extrabold tracking-tight">Coin</h1>
         <span className="flex items-center gap-1 rounded-full bg-coin-soft px-3 py-2 text-[13px] font-bold"><Coins className="size-4 text-warning" />{w.balance.toLocaleString()}</span>
       </div>
-      <p className="text-xs text-muted-foreground">Coin ได้จากการทำกิจกรรมในแอปเท่านั้น ใช้โพสต์และให้รางวัล ไม่ใช่เงินจริงและโอนให้กันไม่ได้</p>
+      <p className="text-xs text-muted-foreground">Coin ได้จากการทำกิจกรรมในแอปเท่านั้น ใช้โพสต์ ให้รางวัล และแลกของรางวัล ไม่ใช่เงินจริง เติมเงินหรือแลกเป็นเงินไม่ได้ และโอนให้กันไม่ได้</p>
 
       <section className="relative overflow-hidden rounded-3xl bg-indigo p-5 text-white shadow-float">
         <div aria-hidden className="absolute -top-10 -right-8 size-36 rounded-full bg-coin/25" />
@@ -52,6 +52,7 @@ function Coin() {
         <Link href="/feed?tab=foryou" className="flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-primary text-[15px] font-bold text-white"><Sparkles className="size-[18px]" />หา Coin</Link>
         <Link href="/surveys/new" className="flex h-[50px] items-center justify-center gap-2 rounded-[14px] border border-input bg-card text-[15px] font-bold"><ClipboardList className="size-[18px]" />ใช้ Coin</Link>
       </div>
+      <Link href="/rewards" className="flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-coin text-[15px] font-bold text-indigo"><Gift className="size-[18px]" />แลกของรางวัล</Link>
 
       <div className="grid grid-cols-2 gap-2">
         <Stat label="ได้รับทั้งหมด" value={w.earned} icon={<ArrowDownLeft />} tone="text-success" />
