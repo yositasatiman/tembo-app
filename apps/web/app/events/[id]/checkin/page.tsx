@@ -7,7 +7,7 @@ import type { CheckInResponse, EventDetail } from '@tembo/shared';
 import { api, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
 import { Button, ErrorText, inputCls, Spinner } from '@/components/ui';
-import { useT } from '@/lib/i18n';
+import { useT, CoinWord } from '@/lib/i18n';
 
 export default function CheckInPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -58,7 +58,7 @@ function CheckIn({ id }: { id: string }) {
             <h1 className="mt-3 text-[22px] font-extrabold">{t('Checked in!', 'เช็กอินแล้ว!')}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{event.title}</p>
             {done.reward > 0 && (
-              <p className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-full bg-coin-soft px-4 py-2 text-lg font-extrabold"><Coins className="size-5 text-warning" />+{done.reward} Coin</p>
+              <p className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-full bg-coin-soft px-4 py-2 text-lg font-extrabold"><Coins className="size-5 text-warning" />+{done.reward} <CoinWord /></p>
             )}
             {done.note && <p className="mt-3 rounded-xl bg-coin-soft px-3 py-2 text-xs text-warning-foreground">{done.note}{done.note.includes('cmu') && <> — <Link href="/me#cmu" className="font-bold underline">{t('Verify email', 'ยืนยันอีเมล')}</Link></>}</p>}
             <Link href={`/events/${id}`} className="mt-5 inline-flex h-11 items-center rounded-xl bg-primary px-5 text-sm font-bold text-white">{t('Back to event', 'กลับไปที่กิจกรรม')}</Link>

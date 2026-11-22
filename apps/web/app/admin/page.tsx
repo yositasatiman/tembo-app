@@ -5,7 +5,7 @@ import { api, ApiError, post } from '@/lib/api';
 import { AppShell } from '@/components/shell';
 import { EVENT_CATEGORY_LABEL, type EventCategory, facultyLabel } from '@tembo/shared';
 import { Button, Card, ErrorText, fmtDate, SectionHeader } from '@/components/ui';
-import { useT } from '@/lib/i18n';
+import { useT, CoinWord } from '@/lib/i18n';
 import { eventTimeShort } from '@/components/event/util';
 import { AdminRewards } from './rewards';
 import { GrantCoins } from './grant-coins';
@@ -59,7 +59,7 @@ function AdminEvents() {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title={t('Events awaiting review', 'กิจกรรมรอตรวจ')} subtitle={t('Approved events go live right away and the posting fee is charged. Rejected events get all their Coin back.', 'อนุมัติแล้วกิจกรรมจะขึ้นฟีดทันทีและค่าโพสต์ถูกหัก / ไม่อนุมัติ ระบบคืน Coin ทั้งหมดให้ผู้จัด')} />
+      <SectionHeader title={t('Events awaiting review', 'กิจกรรมรอตรวจ')} subtitle={t('Approved events go live right away and the posting fee is charged. Rejected events get all their Coin back.', 'อนุมัติแล้วกิจกรรมจะขึ้นฟีดทันทีและค่าโพสต์ถูกหัก / ไม่อนุมัติ ระบบคืนเหรียญทั้งหมดให้ผู้จัด')} />
       <ErrorText>{error}</ErrorText>
       {rows?.length === 0 && <Card className="py-10 text-center text-sm text-muted-foreground">{t('No events waiting for review', 'ไม่มีกิจกรรมรอตรวจ')}</Card>}
       {rows?.map((r) => (
@@ -102,7 +102,7 @@ function Admin() {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title={t('Subsidy requests', 'ขอระบบสมทบ')} subtitle={t('Check that it is real research before approving. TEMBO adds the Coin to the reward pool right away.', 'ตรวจว่าเป็นงานวิจัยจริงก่อนอนุมัติ — ระบบจะเพิ่ม Coin เข้ารางวัลทันที')} />
+      <SectionHeader title={t('Subsidy requests', 'ขอระบบสมทบ')} subtitle={t('Check that it is real research before approving. TEMBO adds the Coin to the reward pool right away.', 'ตรวจว่าเป็นงานวิจัยจริงก่อนอนุมัติ — ระบบจะเพิ่มเหรียญเข้ารางวัลทันที')} />
       <ErrorText>{error}</ErrorText>
       {rows?.length === 0 && <Card className="py-10 text-center text-sm text-muted-foreground">{t('Nothing waiting for review', 'ไม่มีรายการรอตรวจ')}</Card>}
       {rows?.map((r) => (
@@ -111,7 +111,7 @@ function Admin() {
           {r.description && <p className="whitespace-pre-line text-sm">{r.description}</p>}
           <p className="text-xs text-muted-foreground">
             {r.owner.displayName} · {r.owner.faculty} · {r.owner.cmuEmail}<br />
-            {t(`${r.questionCount} questions`, `${r.questionCount} ข้อ`)} · {r.rewardPerResponse} × {r.quota} = {r.targetPool} Coin · {t('requested', 'ขอสมทบ')} <b>{r.subsidyAmount}</b> · {fmtDate(r.createdAt)}
+            {t(`${r.questionCount} questions`, `${r.questionCount} ข้อ`)} · {r.rewardPerResponse} × {r.quota} = {r.targetPool} <CoinWord /> · {t('requested', 'ขอสมทบ')} <b>{r.subsidyAmount}</b> · {fmtDate(r.createdAt)}
           </p>
           <div className="flex gap-2">
             <Button className="flex-1" onClick={() => review(r.id, true)}>{t('Approve', 'อนุมัติ')}</Button>

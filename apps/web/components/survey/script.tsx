@@ -43,7 +43,7 @@ export function ScriptOwnerSetup({ s, reload }: { s: SurveyDetail; reload: () =>
           <p className="font-extrabold">{t('Google Form connected', 'เชื่อม Google Form แล้ว')}</p>
           <p className="text-muted-foreground">{s.rewardMode === 'DRAW'
             ? t('When someone submits the form, TEMBO enters them in the lucky draw automatically. Answers stay in your Google Form.', 'เมื่อมีคนส่งฟอร์ม TEMBO จะให้สิทธิ์ลุ้นรางวัลอัตโนมัติ · คำตอบอยู่ใน Google Form ของคุณ')
-            : t('When someone submits the form, TEMBO gives them Coin automatically. Answers stay in your Google Form.', 'เมื่อมีคนส่งฟอร์ม TEMBO จะให้ Coin อัตโนมัติ · คำตอบอยู่ใน Google Form ของคุณ')}</p>
+            : t('When someone submits the form, TEMBO gives them Coin automatically. Answers stay in your Google Form.', 'เมื่อมีคนส่งฟอร์ม TEMBO จะให้เหรียญอัตโนมัติ · คำตอบอยู่ใน Google Form ของคุณ')}</p>
         </div>
       </Card>
     );
@@ -115,7 +115,7 @@ export function ScriptRespond({ s, reload }: { s: SurveyDetail; reload: () => vo
   if (s.hasResponded) {
     const title = draw
       ? (s.drawnAt ? (s.myPrizeRank ? t(`You won prize #${s.myPrizeRank}!`, `ได้รางวัลอันดับ ${s.myPrizeRank}!`) : t('Results are out. No prize this time.', 'ประกาศผลแล้ว รอบนี้ยังไม่ได้รางวัล')) : t('You are in the lucky draw', 'ได้สิทธิ์ลุ้นรางวัลแล้ว'))
-      : t(`Submitted. You received ${s.rewardPerResponse} Coin`, `ส่งแล้ว ได้รับ ${s.rewardPerResponse} Coin`);
+      : t(`Submitted. You received ${s.rewardPerResponse} Coin`, `ส่งแล้ว ได้รับ ${s.rewardPerResponse} เหรียญ`);
     return (
       <Card className="flex items-start gap-3">
         <span className={cx('flex size-10 shrink-0 items-center justify-center rounded-xl', draw ? 'bg-coin-soft text-warning' : 'bg-success-soft text-success')}>{draw ? <Gift className="size-5" /> : <CheckCircle2 className="size-5" />}</span>
@@ -134,7 +134,7 @@ export function ScriptRespond({ s, reload }: { s: SurveyDetail; reload: () => vo
         <h3 className="font-extrabold">{t('Take the survey', 'ตอบแบบสอบถาม')}</h3>
         <p className="text-sm text-muted-foreground">{draw
           ? t(`${s.questionCount} questions · submit the Google Form to enter the lucky draw automatically. No code needed.`, `${s.questionCount} ข้อ · ส่ง Google Form แล้วได้สิทธิ์ลุ้นรางวัลอัตโนมัติ ไม่ต้องกรอกรหัสยืนยัน`)
-          : t(`${s.questionCount} questions · submit the Google Form to get ${s.rewardPerResponse} Coin automatically. No code needed.`, `${s.questionCount} ข้อ · ส่ง Google Form แล้วรับ ${s.rewardPerResponse} Coin อัตโนมัติ ไม่ต้องกรอกรหัสยืนยัน`)}</p>
+          : t(`${s.questionCount} questions · submit the Google Form to get ${s.rewardPerResponse} Coin automatically. No code needed.`, `${s.questionCount} ข้อ · ส่ง Google Form แล้วรับ ${s.rewardPerResponse} เหรียญอัตโนมัติ ไม่ต้องกรอกรหัสยืนยัน`)}</p>
       </div>
       <Button type="button" className="w-full" variant={start ? 'outline' : 'primary'} onClick={open}><ExternalLink />{start ? t('Open the survey again', 'เปิดแบบสอบถามอีกครั้ง') : t('Open the survey', 'เปิดแบบสอบถาม')}</Button>
       {start?.code && (

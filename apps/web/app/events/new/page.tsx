@@ -69,7 +69,7 @@ function NewEvent() {
     <form onSubmit={submit} className="mx-auto max-w-2xl space-y-3">
       <div>
         <h1 className="text-[22px] font-extrabold tracking-tight">{t('Create event', 'สร้างกิจกรรม')}</h1>
-        <p className="text-xs text-muted-foreground">{t(`Your event goes live after an admin reviews it · posting fee ${EVENT_RULES.POST_FEE} Coin (refunded if not approved)`, `กิจกรรมจะขึ้นฟีดหลังแอดมินตรวจ · ค่าโพสต์ ${EVENT_RULES.POST_FEE} Coin (คืนให้ถ้าไม่ผ่านการตรวจ)`)}</p>
+        <p className="text-xs text-muted-foreground">{t(`Your event goes live after an admin reviews it · posting fee ${EVENT_RULES.POST_FEE} Coin (refunded if not approved)`, `กิจกรรมจะขึ้นฟีดหลังแอดมินตรวจ · ค่าโพสต์ ${EVENT_RULES.POST_FEE} เหรียญ (คืนให้ถ้าไม่ผ่านการตรวจ)`)}</p>
       </div>
 
       <Card className="space-y-4">
@@ -119,10 +119,10 @@ function NewEvent() {
       </Card>
 
       <Card className="space-y-3">
-        <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={withReward} onChange={(e) => setWithReward(e.target.checked)} className="size-4 accent-primary" />{t('Give Coin to people who check in', 'ให้ Coin กับคนที่เช็กอินที่งาน')}</label>
+        <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={withReward} onChange={(e) => setWithReward(e.target.checked)} className="size-4 accent-primary" />{t('Give Coin to people who check in', 'ให้เหรียญกับคนที่เช็กอินที่งาน')}</label>
         {withReward && (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={t('Coin per person', 'Coin ต่อคน')}><input type="number" className={inputCls} min={1} max={EVENT_RULES.MAX_REWARD} required value={reward} onChange={(e) => setReward(Number(e.target.value))} /></Field>
+            <Field label={t('Coin per person', 'เหรียญต่อคน')}><input type="number" className={inputCls} min={1} max={EVENT_RULES.MAX_REWARD} required value={reward} onChange={(e) => setReward(Number(e.target.value))} /></Field>
             <Field label={t('Number of people rewarded', 'จำนวนคนที่ได้รางวัล')} hint={limited ? t(`Up to ${capacity}`, `ไม่เกิน ${capacity} คน`) : undefined}>
               <input type="number" className={inputCls} min={1} max={limited ? capacity : EVENT_RULES.MAX_REWARD_SLOTS} required value={slots} onChange={(e) => setSlots(Number(e.target.value))} />
             </Field>
@@ -130,13 +130,13 @@ function NewEvent() {
         )}
         <div className="space-y-1 rounded-xl bg-lavender-soft p-3 text-sm">
           <Row label={t('Posting fee', 'ค่าโพสต์')} value={q.postFee} />
-          {withReward && <Row label={t(`Reward Coin (${reward} × ${slots}), held until paid out`, `Coin รางวัล (${reward} × ${slots} คน) — พักไว้จนกว่าจะจ่าย`)} value={q.rewardPool} />}
+          {withReward && <Row label={t(`Reward Coin (${reward} × ${slots}), held until paid out`, `เหรียญรางวัล (${reward} × ${slots} คน) — พักไว้จนกว่าจะจ่าย`)} value={q.rewardPool} />}
           <div className="flex justify-between border-t border-primary/15 pt-1 font-extrabold"><span>{t('Total', 'รวมที่ต้องใช้')}</span><span className="flex items-center gap-1"><Coins className="size-4 text-warning" />{q.total.toLocaleString()}</span></div>
-          <p className="text-xs text-muted-foreground">{t(`Your Coin ${me.balance.toLocaleString()} · unpaid rewards are returned after the event`, `Coin ของคุณ ${me.balance.toLocaleString()} · รางวัลที่ไม่ได้จ่ายจะคืนให้เมื่อจบงาน`)}</p>
+          <p className="text-xs text-muted-foreground">{t(`Your Coin ${me.balance.toLocaleString()} · unpaid rewards are returned after the event`, `เหรียญของคุณ ${me.balance.toLocaleString()} · รางวัลที่ไม่ได้จ่ายจะคืนให้เมื่อจบงาน`)}</p>
         </div>
       </Card>
 
-      <ErrorText>{short ? t(`Not enough Coin (need ${q.total}, you have ${me.balance})`, `Coin ไม่พอ (ต้องใช้ ${q.total} มีอยู่ ${me.balance})`) : error}</ErrorText>
+      <ErrorText>{short ? t(`Not enough Coin (need ${q.total}, you have ${me.balance})`, `เหรียญไม่พอ (ต้องใช้ ${q.total} มีอยู่ ${me.balance})`) : error}</ErrorText>
       <Button className="w-full" disabled={loading || short}>{loading ? t('Submitting…', 'กำลังส่ง…') : t('Submit for review', 'ส่งให้แอดมินตรวจ')}</Button>
     </form>
   );

@@ -51,7 +51,7 @@ function Feed() {
       {!me.cmuVerified && (
         <Link href="/me#cmu" className="flex items-center gap-3 rounded-2xl bg-coin-soft p-3 text-xs text-indigo">
           <ShieldAlert className="size-5 shrink-0 text-warning" />
-          <span><b>{t('Verify your @cmu.ac.th email', 'ยืนยันอีเมล @cmu.ac.th')}</b> {t('to earn Coin from surveys and event check-ins', 'เพื่อรับ Coin จากการตอบแบบสอบถามและเช็กอินกิจกรรม')}</span>
+          <span><b>{t('Verify your @cmu.ac.th email', 'ยืนยันอีเมล @cmu.ac.th')}</b> {t('to earn Coin from surveys and event check-ins', 'เพื่อรับเหรียญจากการตอบแบบสอบถามและเช็กอินกิจกรรม')}</span>
         </Link>
       )}
       {tab === 'foryou' && !q && (

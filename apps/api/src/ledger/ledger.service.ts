@@ -7,7 +7,7 @@ export interface EntryInput { walletId: string; delta: number }
 export interface PostInput { type: TxType; idempotencyKey: string; memo?: string; entries: EntryInput[] }
 
 export class InsufficientCoinError extends BadRequestException {
-  constructor() { super(bi('Not enough Coin', 'Coin ไม่พอ')); }
+  constructor() { super(bi('Not enough Coin', 'เหรียญไม่พอ')); }
 }
 
 /**

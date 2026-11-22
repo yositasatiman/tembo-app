@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { CalendarDays, Coins, MapPin, Share2, Sparkles, Users } from 'lucide-react';
 import { interestLabel, type EventSummary } from '@tembo/shared';
-import { useT } from '@/lib/i18n';
+import { useT, CoinWord } from '@/lib/i18n';
 import { cx } from '../ui';
 import { EventCover } from './cover';
 import { eventState, eventTimeShort, shareLink } from './util';
@@ -41,7 +41,7 @@ export function EventCard({ e, onHide, onToast, reason }: { e: EventSummary; onH
         {(e.tags.length > 0 || e.rewardPerCheckIn > 0) && (
           <div className="flex flex-wrap gap-1.5 pt-0.5">
             {e.rewardPerCheckIn > 0 && e.rewardsLeft > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-coin-soft px-2 py-1 text-[11px] font-bold text-indigo"><Coins className="size-3" />+{e.rewardPerCheckIn} Coin</span>
+              <span className="flex items-center gap-1 rounded-full bg-coin-soft px-2 py-1 text-[11px] font-bold text-indigo"><Coins className="size-3" />+{e.rewardPerCheckIn} <CoinWord /></span>
             )}
             {e.tags.slice(0, 3).map((x) => <span key={x} className="rounded-full bg-lavender-soft px-2 py-1 text-[11px] font-bold text-primary">{p(interestLabel(x))}</span>)}
           </div>

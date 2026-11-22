@@ -7,7 +7,7 @@ import { REDEMPTION_STATUS_LABEL, type RedemptionItem, type RewardItem } from '@
 import { api, post } from '@/lib/api';
 import { AppShell, PageHeading, useMe } from '@/components/shell';
 import { Banner, Button, cx, EmptyState, ErrorText, fmtDate, Modal, Spinner, Toast } from '@/components/ui';
-import { useT } from '@/lib/i18n';
+import { useT, CoinWord } from '@/lib/i18n';
 
 export default function RewardsPage() {
   return <AppShell><Rewards /></AppShell>;
@@ -45,8 +45,8 @@ function Rewards() {
   }
 
   async function cancel(id: string) {
-    if (!window.confirm(t('Cancel this redemption? Your Coin will be refunded in full.', 'ยกเลิกการแลกนี้? ระบบจะคืน Coin ให้เต็มจำนวน'))) return;
-    try { await post(`/rewards/redemptions/${id}/cancel`); setToast(t('Cancelled. Your Coin has been refunded.', 'ยกเลิกแล้ว คืน Coin เรียบร้อย')); load(); reload(); }
+    if (!window.confirm(t('Cancel this redemption? Your Coin will be refunded in full.', 'ยกเลิกการแลกนี้? ระบบจะคืนเหรียญให้เต็มจำนวน'))) return;
+    try { await post(`/rewards/redemptions/${id}/cancel`); setToast(t('Cancelled. Your Coin has been refunded.', 'ยกเลิกแล้ว คืนเหรียญเรียบร้อย')); load(); reload(); }
     catch (e) { setError((e as Error).message); }
   }
 
@@ -54,7 +54,7 @@ function Rewards() {
 
   return (
     <div className="space-y-3">
-      <PageHeading title={t('Rewards', 'ร้านรางวัล')} subtitle={t('Collect Coin from surveys and event check-ins, then trade it for rewards', 'สะสม Coin จากการตอบแบบสอบถามและเช็กอินกิจกรรม แล้วนำมาแลกของรางวัล')} />
+      <PageHeading title={t('Rewards', 'ร้านรางวัล')} subtitle={t('Collect Coin from surveys and event check-ins, then trade it for rewards', 'สะสมเหรียญจากการตอบแบบสอบถามและเช็กอินกิจกรรมแล้วนำมาแลกของรางวัล')} />
 
       <nav aria-label={t('Reward sections', 'ส่วนของร้านรางวัล')} className="flex gap-[7px]">
         {TABS.map((x) => (
@@ -68,7 +68,7 @@ function Rewards() {
 
       {!me.cmuVerified && (
         <Banner tone="warning" icon={<ShieldAlert />} title={t('Verify your @cmu.ac.th email before redeeming', 'ยืนยันอีเมล @cmu.ac.th ก่อนแลกของรางวัล')}>
-          {t('This stops fake accounts from collecting Coin', 'กันบัญชีปลอมมาสะสม Coin')} — <Link href="/me" className="font-bold underline">{t('Verify on your profile', 'ไปยืนยันที่โปรไฟล์')}</Link>
+          {t('This stops fake accounts from collecting Coin', 'กันบัญชีปลอมมาสะสมเหรียญ')} — <Link href="/me" className="font-bold underline">{t('Verify on your profile', 'ไปยืนยันที่โปรไฟล์')}</Link>
         </Banner>
       )}
       <ErrorText>{error}</ErrorText>
@@ -118,7 +118,7 @@ function Rewards() {
                       {p(REDEMPTION_STATUS_LABEL[m.status])}
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">{m.cost.toLocaleString()} Coin · {t('redeemed', 'แลกเมื่อ')} {fmtDate(m.createdAt)}{m.status === 'CANCELLED' ? t(' · Coin refunded', ' · คืน Coin แล้ว') : ''}</p>
+                  <p className="text-[11px] text-muted-foreground">{m.cost.toLocaleString()} <CoinWord /> · {t('redeemed', 'แลกเมื่อ')} {fmtDate(m.createdAt)}{m.status === 'CANCELLED' ? t(' · Coin refunded', ' · คืนเหรียญแล้ว') : ''}</p>
                   {m.note && <p className="rounded-lg bg-lavender-soft px-2.5 py-1.5 text-xs">{m.note}</p>}
                   {m.status === 'PENDING' && <button type="button" onClick={() => cancel(m.id)} className="text-xs font-bold text-destructive hover:underline">{t('Cancel redemption', 'ยกเลิกการแลก')}</button>}
                 </li>
@@ -132,8 +132,8 @@ function Rewards() {
           <div className="space-y-3">
             <h2 className="text-lg font-extrabold">{t(`Redeem “${confirm.title}”?`, `แลก “${confirm.title}”?`)}</h2>
             <p className="text-sm whitespace-pre-line">{confirm.description}</p>
-            <p className="rounded-xl bg-coin-soft px-3 py-2 text-sm">{t('Uses', 'ใช้')} <b>{confirm.cost.toLocaleString()} Coin</b> · {t('balance after', 'คงเหลือหลังแลก')} {(me.balance - confirm.cost).toLocaleString()} Coin</p>
-            <p className="text-xs text-muted-foreground">{t('You can cancel while waiting for pickup and get your Coin back in full.', 'ยกเลิกได้ระหว่างรอรับของ และจะได้ Coin คืนเต็มจำนวน')}</p>
+            <p className="rounded-xl bg-coin-soft px-3 py-2 text-sm">{t('Uses', 'ใช้')} <b>{confirm.cost.toLocaleString()} <CoinWord /></b> · {t('balance after', 'คงเหลือหลังแลก')} {(me.balance - confirm.cost).toLocaleString()} <CoinWord /></p>
+            <p className="text-xs text-muted-foreground">{t('You can cancel while waiting for pickup and get your Coin back in full.', 'ยกเลิกได้ระหว่างรอรับของ และจะได้เหรียญคืนเต็มจำนวน')}</p>
             <ErrorText>{error}</ErrorText>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" disabled={busy} onClick={() => setConfirm(null)}>{t('Cancel', 'ยกเลิก')}</Button>

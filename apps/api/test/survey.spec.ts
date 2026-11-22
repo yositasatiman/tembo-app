@@ -41,7 +41,7 @@ describe('Surveys: escrow / ค่าโพสต์ / ระบบสมทบ 
   it('ตรวจรางวัลขั้นต่ำตามจำนวนข้อ และจำนวนข้อสูงสุด 50', async () => {
     const { agent } = await makeUser(app);
     const r1 = await agent.post('/surveys').send({ ...base, questions: qs(25), rewardPerResponse: 5, ownerContribution: 50 }).expect(400);
-    expect(r1.body.message).toMatch(/อย่างน้อย 6 Coin/);
+    expect(r1.body.message).toMatch(/อย่างน้อย 6 เหรียญ/);
     await agent.post('/surveys').send({ ...base, questions: qs(51), rewardPerResponse: 20, ownerContribution: 50 }).expect(400);
     await agent.post('/surveys').send({ ...base, closesAt: inDays(61), ownerContribution: 50 }).expect(400);
   });

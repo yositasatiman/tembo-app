@@ -73,7 +73,7 @@ describe('แบบสอบถาม Google Form + สคริปต์ส่�
     expect(await balanceOf(prisma, u.wallet.id)).toBe(5);
     const d = (await u.agent.get(`/surveys/${s.id}`).expect(200)).body;
     expect(d).toMatchObject({ responded: true, myStart: { submittedAt: expect.any(String) } });
-    expect((await u.agent.get('/notifications').expect(200)).body.items[0]).toMatchObject({ type: 'SURVEY_REWARDED', title: 'ได้รับ 5 Coin' });
+    expect((await u.agent.get('/notifications').expect(200)).body.items[0]).toMatchObject({ type: 'SURVEY_REWARDED', title: 'ได้รับ 5 เหรียญ' });
   });
 
   it('Eligibility: จำกัดคณะ/ชั้นปี → คนนอกกลุ่มตอบไม่ได้และไม่เห็นในฟีด', async () => {

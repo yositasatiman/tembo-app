@@ -7,7 +7,7 @@ import {
   MapPin, QrCode, Settings2, Share2, Ticket, XCircle,
 } from 'lucide-react';
 import { EVENT_CATEGORY_LABEL, interestLabel, type EventDetail } from '@tembo/shared';
-import { useT } from '@/lib/i18n';
+import { useT, CoinWord } from '@/lib/i18n';
 import { api, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
 import { Banner, cx, ErrorText, Spinner, Toast } from '@/components/ui';
@@ -52,7 +52,7 @@ function Detail({ id }: { id: string }) {
   };
   const notInterested = () => act(() => post(`/events/${e.id}/hide`)).then(() => router.push('/events'));
   const cancelEvent = () => {
-    if (!window.confirm(e.status === 'PENDING_REVIEW' ? t('Cancel this event? All your Coin, including the posting fee, will be refunded.', 'ยกเลิกกิจกรรมนี้? ระบบจะคืน Coin ทั้งหมดรวมค่าโพสต์') : t('Cancel this event? Registered people will see that it was cancelled, and the remaining reward Coin will be returned to you (the posting fee is not refunded).', 'ยกเลิกกิจกรรมนี้? ผู้ที่ลงทะเบียนจะเห็นว่างานถูกยกเลิก และ Coin รางวัลที่เหลือจะคืนให้คุณ (ค่าโพสต์ไม่คืน)'))) return;
+    if (!window.confirm(e.status === 'PENDING_REVIEW' ? t('Cancel this event? All your Coin, including the posting fee, will be refunded.', 'ยกเลิกกิจกรรมนี้? ระบบจะคืนเหรียญทั้งหมดรวมค่าโพสต์') : t('Cancel this event? Registered people will see that it was cancelled, and the remaining reward Coin will be returned to you (the posting fee is not refunded).', 'ยกเลิกกิจกรรมนี้? ผู้ที่ลงทะเบียนจะเห็นว่างานถูกยกเลิก และเหรียญรางวัลที่เหลือจะคืนให้คุณ (ค่าโพสต์ไม่คืน)'))) return;
     act(() => post<EventDetail>(`/events/${e.id}/cancel`));
   };
 
@@ -106,7 +106,7 @@ function Detail({ id }: { id: string }) {
         <InfoRow icon={<CalendarDays />} label={t('Date and time', 'วันและเวลา')} value={eventTimeLong(e.startsAt, e.endsAt, lang)} />
         <InfoRow icon={<MapPin />} label={t('Location', 'สถานที่')} value={e.location} />
         {e.rewardPerCheckIn > 0 && (
-          <InfoRow icon={<Coins />} label={t('Reward for checking in', 'รางวัลเมื่อเช็กอินที่งาน')} value={t(`+${e.rewardPerCheckIn} Coin · ${e.rewardsLeft.toLocaleString()} left`, `+${e.rewardPerCheckIn} Coin · เหลือ ${e.rewardsLeft.toLocaleString()} สิทธิ์`)} coin />
+          <InfoRow icon={<Coins />} label={t('Reward for checking in', 'รางวัลเมื่อเช็กอินที่งาน')} value={t(`+${e.rewardPerCheckIn} Coin · ${e.rewardsLeft.toLocaleString()} left`, `+${e.rewardPerCheckIn} เหรียญ · เหลือ ${e.rewardsLeft.toLocaleString()} สิทธิ์`)} coin />
         )}
         {e.registrationUrl && (
           <InfoRow icon={<ExternalLink />} label={t("Organizer's registration form", 'ฟอร์มลงทะเบียนของผู้จัด')} value={<a href={e.registrationUrl} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline">{new URL(e.registrationUrl).host}</a>} />
@@ -157,7 +157,7 @@ function StatusBanner({ e, state }: { e: EventDetail; state: ReturnType<typeof e
   if (e.myCheckedIn) {
     return (
       <Banner tone="success" icon={<CheckCircle2 />} title={t('Checked in', 'เช็กอินแล้ว')}>
-        {e.myReward > 0 ? t(`You got ${e.myReward} Coin for joining this event`, `คุณได้รับ ${e.myReward} Coin จากการเข้าร่วมงานนี้`) : t('Thanks for coming!', 'ขอบคุณที่มาร่วมงาน')}
+        {e.myReward > 0 ? t(`You got ${e.myReward} Coin for joining this event`, `คุณได้รับ ${e.myReward} เหรียญจากการเข้าร่วมงานนี้`) : t('Thanks for coming!', 'ขอบคุณที่มาร่วมงาน')}
       </Banner>
     );
   }
@@ -179,9 +179,9 @@ function StatusBanner({ e, state }: { e: EventDetail; state: ReturnType<typeof e
     case 'full':
       return <Banner tone="danger" icon={<XCircle />} title={t('This event is full', 'ที่นั่งเต็มแล้ว')}>{t('Join the waitlist and you will be moved up if a spot opens.', 'กิจกรรมนี้เต็มแล้ว เข้าคิวรอไว้ได้ ถ้ามีที่ว่างระบบจะเลื่อนคุณขึ้นให้')}</Banner>;
     case 'pending':
-      return <Banner tone="warning" icon={<Clock />} title={t('Waiting for admin review', 'รอแอดมินตรวจ')}>{t('Your event goes live after an admin approves it. The posting fee and reward Coin are held until then.', 'กิจกรรมจะขึ้นฟีดหลังแอดมินอนุมัติ ค่าโพสต์และ Coin รางวัลจะถูกพักไว้ก่อน')}</Banner>;
+      return <Banner tone="warning" icon={<Clock />} title={t('Waiting for admin review', 'รอแอดมินตรวจ')}>{t('Your event goes live after an admin approves it. The posting fee and reward Coin are held until then.', 'กิจกรรมจะขึ้นฟีดหลังแอดมินอนุมัติ ค่าโพสต์และเหรียญรางวัลจะถูกพักไว้ก่อน')}</Banner>;
     case 'rejected':
-      return <Banner tone="danger" icon={<XCircle />} title={t('Not approved by an admin', 'แอดมินไม่อนุมัติ')}>{e.reviewNote ? t(`Reason: ${e.reviewNote} · `, `เหตุผล: ${e.reviewNote} · `) : ''}{t('All your Coin has been refunded.', 'คืน Coin ทั้งหมดให้คุณแล้ว')}</Banner>;
+      return <Banner tone="danger" icon={<XCircle />} title={t('Not approved by an admin', 'แอดมินไม่อนุมัติ')}>{e.reviewNote ? t(`Reason: ${e.reviewNote} · `, `เหตุผล: ${e.reviewNote} · `) : ''}{t('All your Coin has been refunded.', 'คืนเหรียญทั้งหมดให้คุณแล้ว')}</Banner>;
     case 'cancelled':
       return <Banner tone="danger" icon={<Ban />} title={t('This event was cancelled', 'กิจกรรมนี้ถูกยกเลิก')}>{t('The organizer cancelled this event.', 'ผู้จัดยกเลิกกิจกรรมนี้แล้ว')}</Banner>;
     case 'ended':
@@ -202,7 +202,7 @@ function OrganizerPanel({ e }: { e: EventDetail }) {
         <Stat label={t('Checked in', 'เช็กอิน')} value={e.checkedInCount} />
       </div>
       <p className="text-[11px] text-muted-foreground">
-        {t('Posting fee', 'ค่าโพสต์')} {e.postFee} Coin · {t('Reward Coin held', 'Coin รางวัลที่พักไว้')} {e.escrowBalance?.toLocaleString() ?? 0}
+        {t('Posting fee', 'ค่าโพสต์')} {e.postFee} <CoinWord /> · {t('Reward Coin held', 'เหรียญรางวัลที่พักไว้')} {e.escrowBalance?.toLocaleString() ?? 0}
         {e.rewardPerCheckIn > 0 && t(` · rewards paid ${e.rewardedCount}/${e.rewardSlots}`, ` · จ่ายรางวัลแล้ว ${e.rewardedCount}/${e.rewardSlots} คน`)}
         {' '}· {t('check-in', 'เปิดเช็กอิน')} {timeOnly(e.checkInOpensAt)}–{timeOnly(e.checkInClosesAt)}{t('', ' น.')}
       </p>

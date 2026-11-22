@@ -12,7 +12,7 @@ import {
   type DraftDetail, type DraftSummary, type RewardMode, type SurveyCategory, type SurveyDetail, type SurveyQuoteResponse,
 } from '@tembo/shared';
 import { api, post } from '@/lib/api';
-import { useT, type TFn } from '@/lib/i18n';
+import { useT, type TFn, CoinWord } from '@/lib/i18n';
 import { AppShell, useMe } from '@/components/shell';
 import { bareInput, DateField, ErrorSummary, FieldError, fieldBox, Req, Select } from '@/components/form';
 import { Button, cx, ErrorText, fmtDate, Modal, Progress, Spinner } from '@/components/ui';
@@ -70,18 +70,18 @@ function issuesOf(step: number, d: Draft, t: TFn): Issue[] {
     if (!num(d.quota)) need('quota', false, t('Participant count', 'จำนวนผู้ตอบ'), t('Enter the number of participants.', 'กรุณากรอกจำนวนผู้ตอบ'));
     else if (d.quota < 1 || d.quota > SURVEY_RULES.MAX_QUOTA) out.push({ field: 'quota', message: t(`Between 1 and ${SURVEY_RULES.MAX_QUOTA}.`, `ระหว่าง 1–${SURVEY_RULES.MAX_QUOTA} คน`) });
     if (draw) {
-      if (d.prizes.some((p) => !num(p) || p < 1)) out.push({ field: 'prizes', message: t('Each prize needs at least 1 Coin.', 'รางวัลแต่ละอันดับต้องอย่างน้อย 1 Coin'), missing: t('Prizes', 'รางวัล') });
+      if (d.prizes.some((p) => !num(p) || p < 1)) out.push({ field: 'prizes', message: t('Each prize needs at least 1 Coin.', 'รางวัลแต่ละอันดับต้องอย่างน้อย 1 เหรียญ'), missing: t('Prizes', 'รางวัล') });
       else if (num(d.quota) && d.prizes.length > d.quota) out.push({ field: 'prizes', message: t('There cannot be more prizes than participants.', 'จำนวนรางวัลต้องไม่เกินจำนวนผู้ตอบ') });
     } else if (!num(d.reward)) need('reward', false, t('Reward / participant', 'รางวัล / คน'), t('Enter the reward per participant.', 'กรุณากรอกรางวัลต่อคน'));
-    else if (d.reward < 1) out.push({ field: 'reward', message: t('At least 1 Coin.', 'อย่างน้อย 1 Coin') });
+    else if (d.reward < 1) out.push({ field: 'reward', message: t('At least 1 Coin.', 'อย่างน้อย 1 เหรียญ') });
   }
   if (step === 1) {
     if (!d.formUrl.trim()) need('formUrl', false, t('Google Form link', 'ลิงก์ Google Form'), t('Please enter your survey link.', 'กรุณากรอกลิงก์แบบสอบถามของคุณ'));
     else if (!isGoogleFormUrl(d.formUrl)) out.push({ field: 'formUrl', message: t('Please enter a Google Form link (forms.gle or docs.google.com/forms).', 'กรุณากรอกลิงก์ Google Form (forms.gle หรือ docs.google.com/forms)') });
     if (!num(d.questionCount)) need('questionCount', false, t('Number of questions', 'จำนวนข้อ'), t('Enter how many questions the form has.', 'กรุณากรอกจำนวนข้อในฟอร์ม'));
     else if (d.questionCount < 1 || d.questionCount > SURVEY_RULES.MAX_QUESTIONS) out.push({ field: 'questionCount', message: t(`Between 1 and ${SURVEY_RULES.MAX_QUESTIONS}.`, `ระหว่าง 1–${SURVEY_RULES.MAX_QUESTIONS} ข้อ`) });
-    else if (band && !draw && num(d.reward) && d.reward < band.minReward) out.push({ field: 'questionCount', message: t(`A ${d.questionCount}-question survey needs at least ${band.minReward} Coin per person. Change the reward in Info.`, `แบบสอบถาม ${d.questionCount} ข้อ ต้องให้รางวัลอย่างน้อย ${band.minReward} Coin/คน แก้ได้ในขั้นข้อมูล`) });
-    else if (band && draw && d.prizes.some((p) => p < band.minReward)) out.push({ field: 'questionCount', message: t(`A ${d.questionCount}-question survey needs each prize to be at least ${band.minReward} Coin. Change the prizes in Info.`, `แบบสอบถาม ${d.questionCount} ข้อ แต่ละรางวัลต้องอย่างน้อย ${band.minReward} Coin แก้ได้ในขั้นข้อมูล`) });
+    else if (band && !draw && num(d.reward) && d.reward < band.minReward) out.push({ field: 'questionCount', message: t(`A ${d.questionCount}-question survey needs at least ${band.minReward} Coin per person. Change the reward in Info.`, `แบบสอบถาม ${d.questionCount} ข้อ ต้องให้รางวัลอย่างน้อย ${band.minReward} เหรียญ/คน แก้ได้ในขั้นข้อมูล`) });
+    else if (band && draw && d.prizes.some((p) => p < band.minReward)) out.push({ field: 'questionCount', message: t(`A ${d.questionCount}-question survey needs each prize to be at least ${band.minReward} Coin. Change the prizes in Info.`, `แบบสอบถาม ${d.questionCount} ข้อ แต่ละรางวัลต้องอย่างน้อย ${band.minReward} เหรียญแก้ได้ในขั้นข้อมูล`) });
   }
   if (step === 2) {
     if (d.limitFaculty && !d.faculties.length) out.push({ field: 'faculties', message: t('Choose at least 1 faculty, or turn off this limit.', 'เลือกอย่างน้อย 1 คณะ หรือปิดการจำกัดคณะ') });
@@ -269,7 +269,7 @@ function CreateSurvey() {
           <p className="mt-1 text-sm text-muted-foreground">{t('One last step: connect your Google Form so TEMBO knows when someone submits it. Your survey shows in the feed once it is connected.', 'เหลืออีกขั้นเดียว: เชื่อม Google Form เพื่อให้ TEMBO รู้เมื่อมีคนส่ง แบบสอบถามจะขึ้นฟีดหลังเชื่อมเสร็จ')}</p>
           <div className="mt-4 space-y-1.5 rounded-2xl bg-lavender-soft/70 p-3 text-left text-xs">
             <div className="flex justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><Users className="size-3.5" />{t('Participant limit', 'จำนวนผู้ตอบ')}</span><b>{t(`${created.quota} people`, `${created.quota} คน`)}</b></div>
-            <div className="flex justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><Coins className="size-3.5" />{t('Reward budget', 'งบรางวัล')}</span><b>{created.targetPool.toLocaleString()} Coin</b></div>
+            <div className="flex justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><Coins className="size-3.5" />{t('Reward budget', 'งบรางวัล')}</span><b>{created.targetPool.toLocaleString()} <CoinWord /></b></div>
             <div className="flex justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><Calendar className="size-3.5" />{t('Closes', 'ปิดรับ')}</span><b>{fmtDMY(created.closesAt)}</b></div>
           </div>
           <Button type="button" className="mt-4 w-full" onClick={() => router.replace(`/surveys/${created.id}`)}><Link2 />{t('Connect Google Form', 'เชื่อม Google Form')}</Button>
@@ -391,12 +391,12 @@ function InfoStep({ d, set, band, errOf, done }: { d: Draft; set: SetFn; band: R
         </F>
         {draw ? (
           <F label={t('Total prizes', 'รางวัลรวม')}>
-            <div className={cx(fieldBox(false), 'bg-lavender-soft/60')}><Coins className="size-[17px] text-muted-foreground" /><span className="flex-1">{total.toLocaleString()} Coin</span></div>
+            <div className={cx(fieldBox(false), 'bg-lavender-soft/60')}><Coins className="size-[17px] text-muted-foreground" /><span className="flex-1">{total.toLocaleString()} <CoinWord /></span></div>
           </F>
         ) : (
           <F label={t('Reward / participant', 'รางวัล / คน')} required error={errOf('reward')}>
             <NumberBox label={t('Reward per participant', 'รางวัลต่อคน')} icon={<Coins />} value={d.reward} max={SURVEY_RULES.MAX_REWARD} invalid={!!errOf('reward')}
-              onChange={(n) => set('reward', n)} suffix="Coin" />
+              onChange={(n) => set('reward', n)} suffix={t('Coin', 'เหรียญ')} />
           </F>
         )}
       </div>
@@ -409,7 +409,7 @@ function InfoStep({ d, set, band, errOf, done }: { d: Draft; set: SetFn; band: R
               <div className={cx(fieldBox(!!errOf('prizes') && (!num(pz) || pz < 1)), 'h-10')}>
                 <input aria-label={t(`Prize #${i + 1}`, `รางวัลอันดับ ${i + 1}`)} type="number" min={1} max={DRAW_RULES.MAX_PRIZE} value={num(pz) ? pz : ''}
                   onChange={(e) => set('prizes', d.prizes.map((x, j) => j === i ? (e.target.value === '' ? NaN : Number(e.target.value)) : x))} className={bareInput} />
-                <span className="text-muted-foreground">Coin</span>
+                <span className="text-muted-foreground"><CoinWord /></span>
               </div>
               <button type="button" aria-label={t(`Remove prize #${i + 1}`, `ลบอันดับ ${i + 1}`)} disabled={d.prizes.length <= 1} onClick={() => set('prizes', d.prizes.filter((_, j) => j !== i))}
                 className="flex size-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-card disabled:opacity-30"><Minus className="size-4" /></button>
@@ -420,7 +420,7 @@ function InfoStep({ d, set, band, errOf, done }: { d: Draft; set: SetFn; band: R
           )}
           <FieldError>{errOf('prizes')}</FieldError>
         </div>
-      ) : band && <p className="text-[11px] text-muted-foreground">{t(`Suggested ${band.suggestedReward} Coin per person for ${d.questionCount} questions (minimum ${band.minReward}; set the question count in the next step).`, `แนะนำ ${band.suggestedReward} Coin/คน สำหรับ ${d.questionCount} ข้อ (ขั้นต่ำ ${band.minReward} — ตั้งจำนวนข้อในขั้นถัดไป)`)}</p>}
+      ) : band && <p className="text-[11px] text-muted-foreground">{t(`Suggested ${band.suggestedReward} Coin per person for ${d.questionCount} questions (minimum ${band.minReward}; set the question count in the next step).`, `แนะนำ ${band.suggestedReward} เหรียญ/คน สำหรับ ${d.questionCount} ข้อ (ขั้นต่ำ ${band.minReward} — ตั้งจำนวนข้อในขั้นถัดไป)`)}</p>}
       {done && <p className="text-[11px] font-semibold text-success">✓ {t('All required details are complete', 'กรอกข้อมูลที่จำเป็นครบแล้ว')}</p>}
     </Panel>
   );
@@ -455,7 +455,7 @@ function LinkStep({ d, set, errOf }: { d: Draft; set: SetFn; errOf: ErrFn }) {
         </F>
         <div className="rounded-[14px] bg-lavender-soft p-3 text-indigo">
           <p className="text-xs font-extrabold">{t('How TEMBO checks submissions', 'TEMBO รู้ได้อย่างไรว่าส่งฟอร์มแล้ว')}</p>
-          <p className="mt-1 text-xs leading-relaxed">{t('After you publish, you will paste a short script into your Google Form once. It adds a “TEMBO code” question for you and tells TEMBO each time someone submits, so participants get their Coin automatically.', 'หลังโพสต์ คุณจะวางสคริปต์สั้น ๆ ใน Google Form 1 ครั้ง สคริปต์จะเพิ่มคำถาม “รหัส TEMBO” ให้เอง และแจ้ง TEMBO ทุกครั้งที่มีคนส่ง ผู้ตอบจึงได้รับ Coin อัตโนมัติ')}</p>
+          <p className="mt-1 text-xs leading-relaxed">{t('After you publish, you will paste a short script into your Google Form once. It adds a “TEMBO code” question for you and tells TEMBO each time someone submits, so participants get their Coin automatically.', 'หลังโพสต์ คุณจะวางสคริปต์สั้น ๆ ใน Google Form 1 ครั้ง สคริปต์จะเพิ่มคำถาม “รหัส TEMBO” ให้เอง และแจ้ง TEMBO ทุกครั้งที่มีคนส่ง ผู้ตอบจึงได้รับเหรียญอัตโนมัติ')}</p>
         </div>
       </Panel>
       <p className="flex items-start gap-2 rounded-2xl bg-lavender-soft p-3 text-xs text-muted-foreground">
@@ -480,7 +480,7 @@ function EligibilityStep({ d, set, errOf }: { d: Draft; set: SetFn; errOf: ErrFn
           </div>
           <span className="shrink-0 rounded-full bg-lavender px-2.5 py-1 text-[11px] font-bold text-primary">{t(`${count} selected`, `${count} เงื่อนไข`)}</span>
         </div>
-        <Requirement checked locked label={t('Verified @cmu.ac.th email', 'ยืนยันอีเมล @cmu.ac.th แล้ว')} description={t('Required for every survey to stop fake accounts', 'บังคับทุกแบบสอบถาม กันบัญชีปลอมมารับ Coin')} />
+        <Requirement checked locked label={t('Verified @cmu.ac.th email', 'ยืนยันอีเมล @cmu.ac.th แล้ว')} description={t('Required for every survey to stop fake accounts', 'บังคับทุกแบบสอบถาม กันบัญชีปลอมมารับเหรียญ')} />
         <Requirement checked={d.limitFaculty} onToggle={() => set('limitFaculty', !d.limitFaculty)} label={t('Limit by faculty', 'จำกัดคณะ')}
           description={d.limitFaculty && d.faculties.length ? d.faculties.map((f) => p(facultyLabel(f))).join(', ') : t('Only selected faculties', 'เลือกเฉพาะคณะที่ต้องการ')} />
         {d.limitFaculty && (
@@ -557,7 +557,7 @@ function PreviewStep({ d, set, q, isFirstPost, subsidy, balance }: {
       <Panel className="space-y-3">
         <div className="flex items-center justify-between">
           <span className="rounded-full bg-lavender px-2.5 py-1 text-[11px] font-bold text-primary">{d.category ? p(SURVEY_CATEGORIES[d.category]) : '—'}</span>
-          <span className="flex items-center gap-1.5 rounded-full bg-coin-soft px-2.5 py-1.5 text-[13px] font-extrabold"><span className="size-[17px] rounded-full bg-coin" />{draw ? t(`Win up to ${Math.max(...d.prizes)}`, `ลุ้น ${Math.max(...d.prizes)}`) : `+${d.reward}`} Coin</span>
+          <span className="flex items-center gap-1.5 rounded-full bg-coin-soft px-2.5 py-1.5 text-[13px] font-extrabold"><span className="size-[17px] rounded-full bg-coin" />{draw ? t(`Win up to ${Math.max(...d.prizes)}`, `ลุ้น ${Math.max(...d.prizes)}`) : `+${d.reward}`} <CoinWord /></span>
         </div>
         <div>
           <h2 className="text-lg leading-snug font-extrabold">{d.title}</h2>
@@ -575,11 +575,11 @@ function PreviewStep({ d, set, q, isFirstPost, subsidy, balance }: {
       </Panel>
 
       <Panel>
-        <h3 className="text-[15px] font-extrabold">{t('Coin needed', 'Coin ที่ใช้')}</h3>
+        <h3 className="text-[15px] font-extrabold">{t('Coin needed', 'เหรียญที่ใช้')}</h3>
         <label className={cx('flex gap-3 rounded-xl border p-3', subsidy.eligible ? 'border-primary/30 bg-lavender-soft/50' : 'border-border opacity-60')}>
           <input type="checkbox" className="mt-0.5 accent-primary" disabled={!subsidy.eligible} checked={d.requestSubsidy} onChange={(e) => set('requestSubsidy', e.target.checked)} />
           <span className="text-xs">
-            <b>{t('Request the launch subsidy', 'ขอระบบสมทบช่วงเปิดตัว')}</b> — {t(`TEMBO pays half, up to ${SURVEY_RULES.SUBSIDY_MAX_AMOUNT} Coin`, `TEMBO ช่วยครึ่งหนึ่ง สูงสุด ${SURVEY_RULES.SUBSIDY_MAX_AMOUNT} Coin`)}
+            <b>{t('Request the launch subsidy', 'ขอระบบสมทบช่วงเปิดตัว')}</b> — {t(`TEMBO pays half, up to ${SURVEY_RULES.SUBSIDY_MAX_AMOUNT} Coin`, `TEMBO ช่วยครึ่งหนึ่ง สูงสุด ${SURVEY_RULES.SUBSIDY_MAX_AMOUNT} เหรียญ`)}
             <span className="mt-0.5 block text-muted-foreground">{subsidy.reason ?? t('An admin checks that it is real research first. Responses open after the review.', 'แอดมินตรวจก่อนว่าเป็นงานวิจัยจริง ระหว่างนั้นยังไม่รับคำตอบ')}</span>
           </span>
         </label>
@@ -589,8 +589,8 @@ function PreviewStep({ d, set, q, isFirstPost, subsidy, balance }: {
           <Row k={isFirstPost ? t('Posting fee (first post free)', 'ค่าโพสต์ (โพสต์แรกฟรี)') : t('Posting fee', 'ค่าโพสต์')} v={q.postFee} />
           {!draw && (
             <div className="flex items-center justify-between gap-3 pt-1">
-              <dt>{t('You put in', 'คุณลง Coin เอง')}<span className="block text-[11px] text-muted-foreground">{q.minOwnerContribution}–{q.maxOwnerContribution} · {t('friends can sponsor the rest', 'ที่ขาดให้เพื่อนช่วยสนับสนุนได้')}</span></dt>
-              <dd><input type="number" aria-label={t('Coin you put in', 'Coin ที่ลงเอง')} min={q.minOwnerContribution} max={q.maxOwnerContribution} value={own}
+              <dt>{t('You put in', 'คุณลงเหรียญเอง')}<span className="block text-[11px] text-muted-foreground">{q.minOwnerContribution}–{q.maxOwnerContribution} · {t('friends can sponsor the rest', 'ที่ขาดให้เพื่อนช่วยสนับสนุนได้')}</span></dt>
+              <dd><input type="number" aria-label={t('Coin you put in', 'เหรียญที่ลงเอง')} min={q.minOwnerContribution} max={q.maxOwnerContribution} value={own}
                 onChange={(e) => set('contribution', Number(e.target.value))} className="h-10 w-24 rounded-xl border border-[#ddd4f7] px-2 text-right font-bold outline-none focus:border-primary" /></dd>
             </div>
           )}
@@ -598,8 +598,8 @@ function PreviewStep({ d, set, q, isFirstPost, subsidy, balance }: {
           <div className="border-t border-border pt-1.5"><Row k={t('Charged when you publish', 'หักจากกระเป๋าตอนโพสต์')} v={cost} bold /></div>
           <Row k={t('Balance after publishing', 'คงเหลือหลังโพสต์')} v={balance - cost} />
         </dl>
-        {balance < cost && <ErrorText>{t(`Not enough Coin (you have ${balance.toLocaleString()})`, `Coin ไม่พอ (มี ${balance.toLocaleString()})`)}</ErrorText>}
-        <p className="text-[11px] text-muted-foreground">{t('Leftover Coin comes back to you when the survey closes. The posting fee is not refunded.', 'Coin ที่เหลือตอนปิดรับคืนให้คุณ · ค่าโพสต์ไม่คืน')}</p>
+        {balance < cost && <ErrorText>{t(`Not enough Coin (you have ${balance.toLocaleString()})`, `เหรียญไม่พอ (มี ${balance.toLocaleString()})`)}</ErrorText>}
+        <p className="text-[11px] text-muted-foreground">{t('Leftover Coin comes back to you when the survey closes. The posting fee is not refunded.', 'เหรียญที่เหลือตอนปิดรับคืนให้คุณ · ค่าโพสต์ไม่คืน')}</p>
       </Panel>
     </>
   );

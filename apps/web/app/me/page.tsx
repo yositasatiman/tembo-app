@@ -58,7 +58,7 @@ function Me() {
       </section>
 
       <Link href="/coin" className="flex items-center justify-between rounded-2xl bg-indigo p-4 text-white shadow-card">
-        <span><span className="block text-xs opacity-80">{t('My Coin', 'Coin ของฉัน')}</span><span className="text-2xl font-extrabold">{me.balance.toLocaleString()}</span></span>
+        <span><span className="block text-xs opacity-80">{t('My Coin', 'เหรียญของฉัน')}</span><span className="text-2xl font-extrabold">{me.balance.toLocaleString()}</span></span>
         <span className="flex items-center gap-1 text-sm font-bold text-coin">{t('History', 'ดูประวัติ')}<ChevronRight className="size-4" /></span>
       </Link>
 
@@ -124,7 +124,7 @@ function CmuVerifyCard({ verified, cmuEmail: verifiedEmail, onVerified }: { veri
     <Card id="cmu" className="space-y-4 p-6">
       <div>
         <h3 className="flex items-center gap-2 font-extrabold"><ShieldCheck className="size-5 text-primary" />{t('Verify you are from CMU', 'ยืนยันว่าเป็นชาว มช.')}</h3>
-        <p className="text-sm text-muted-foreground">{t('Verify your @cmu.ac.th email to earn Coin from surveys and request the launch subsidy.', 'ยืนยันอีเมล @cmu.ac.th เพื่อรับ Coin จากการตอบแบบสอบถาม และขอระบบสมทบได้')}</p>
+        <p className="text-sm text-muted-foreground">{t('Verify your @cmu.ac.th email to earn Coin from surveys and request the launch subsidy.', 'ยืนยันอีเมล @cmu.ac.th เพื่อรับเหรียญจากการตอบแบบสอบถาม และขอระบบสมทบได้')}</p>
       </div>
       {!sent ? (
         <form onSubmit={send} className="flex flex-col gap-3 sm:flex-row sm:items-end">

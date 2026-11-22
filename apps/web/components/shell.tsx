@@ -54,7 +54,7 @@ const MAIN_NAV = [
 ];
 const MORE_NAV = [
   { href: '/notifications', en: 'Notifications', th: 'แจ้งเตือน', icon: Bell, match: (p: string) => p.startsWith('/notifications') },
-  { href: '/coin', en: 'Coin', th: 'Coin', icon: Coins, match: (p: string) => p.startsWith('/coin') },
+  { href: '/coin', en: 'Coin', th: 'เหรียญ', icon: Coins, match: (p: string) => p.startsWith('/coin') },
   { href: '/rewards', en: 'Rewards', th: 'ร้านรางวัล', icon: Gift, match: (p: string) => p.startsWith('/rewards') },
   { href: '/me', en: 'Profile', th: 'โปรไฟล์', icon: UserRound, match: (p: string) => p === '/me' },
 ];

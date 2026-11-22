@@ -392,7 +392,7 @@ export const createSurveySchema = z.object({
     const band = surveyBand(surveyQuestionCount(v));
     if (!v.prizes.length) ctx.addIssue({ code: 'custom', path: ['prizes'], message: bi('Add at least 1 prize', 'ใส่รางวัลอย่างน้อย 1 รางวัล') });
     if (v.prizes.length > v.quota) ctx.addIssue({ code: 'custom', path: ['prizes'], message: bi('There cannot be more prizes than participants', 'จำนวนรางวัลต้องไม่เกินจำนวนผู้ตอบ') });
-    if (band && v.prizes.some((p) => p < band.minReward)) ctx.addIssue({ code: 'custom', path: ['prizes'], message: bi(`Each prize must be at least ${band.minReward} Coin`, `แต่ละรางวัลต้องอย่างน้อย ${band.minReward} Coin`) });
+    if (band && v.prizes.some((p) => p < band.minReward)) ctx.addIssue({ code: 'custom', path: ['prizes'], message: bi(`Each prize must be at least ${band.minReward} Coin`, `แต่ละรางวัลต้องอย่างน้อย ${band.minReward} เหรียญ`) });
     if (v.rewardPerResponse !== Math.max(0, ...v.prizes)) ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: bi('rewardPerResponse must equal the top prize', 'rewardPerResponse ต้องเท่ากับรางวัลสูงสุด') });
   } else if (v.prizes.length) {
     ctx.addIssue({ code: 'custom', path: ['prizes'], message: bi('Prizes are only for lucky draws', 'ใส่รางวัลรายอันดับเฉพาะแบบสุ่มจับรางวัล') });
@@ -406,7 +406,7 @@ export const createSurveySchema = z.object({
   const n = surveyQuestionCount(v);
   const band = surveyBand(n);
   if (band && v.rewardPerResponse < band.minReward) {
-    ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: bi(`A ${n}-question survey needs at least ${band.minReward} Coin per person`, `แบบสอบถาม ${n} ข้อ ต้องให้รางวัลอย่างน้อย ${band.minReward} Coin/คน`) });
+    ctx.addIssue({ code: 'custom', path: ['rewardPerResponse'], message: bi(`A ${n}-question survey needs at least ${band.minReward} Coin per person`, `แบบสอบถาม ${n} ข้อ ต้องให้รางวัลอย่างน้อย ${band.minReward} เหรียญ/คน`) });
   }
   const now = Date.now();
   if (v.closesAt.getTime() < now + 60 * 60_000) {
@@ -581,7 +581,7 @@ export const createEventSchema = z.object({
   if (v.rewardPerCheckIn > 0) {
     if (v.rewardSlots < 1) ctx.addIssue({ code: 'custom', path: ['rewardSlots'], message: bi('Enter how many people get the reward', 'ระบุจำนวนคนที่ได้รางวัล') });
     if (v.capacity !== null && v.rewardSlots > v.capacity) ctx.addIssue({ code: 'custom', path: ['rewardSlots'], message: bi('Reward slots cannot exceed capacity', 'จำนวนคนที่ได้รางวัลต้องไม่เกินจำนวนที่รับ') });
-  } else if (v.rewardSlots > 0) ctx.addIssue({ code: 'custom', path: ['rewardPerCheckIn'], message: bi('Set Coin per person, or set reward slots to 0', 'ระบุ Coin ต่อคน หรือตั้งจำนวนคนที่ได้รางวัลเป็น 0') });
+  } else if (v.rewardSlots > 0) ctx.addIssue({ code: 'custom', path: ['rewardPerCheckIn'], message: bi('Set Coin per person, or set reward slots to 0', 'ระบุเหรียญต่อคน หรือตั้งจำนวนคนที่ได้รางวัลเป็น 0') });
 });
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 
@@ -692,10 +692,10 @@ export type TxType = 'SIGNUP_BONUS' | 'ADMIN_ADJUST' | 'POST_FEE' | 'ESCROW_FUND
   | 'REWARD_REDEEM' | 'REWARD_REFUND';
 export const TX_LABEL: Record<TxType, string> = {
   SIGNUP_BONUS: bi('Sign-up bonus', 'โบนัสสมัครสมาชิก'), ADMIN_ADJUST: bi('Admin adjustment', 'ปรับยอดโดยแอดมิน'),
-  POST_FEE: bi('Posting fee', 'ค่าโพสต์'), ESCROW_FUND: bi('Reward funding', 'ลง Coin รางวัล'), SUBSIDY: bi('Launch subsidy', 'ระบบสมทบ'),
-  SURVEY_REWARD: bi('Survey reward', 'รางวัลตอบแบบสอบถาม'), ESCROW_REFUND: bi('Coin refund', 'คืน Coin'),
+  POST_FEE: bi('Posting fee', 'ค่าโพสต์'), ESCROW_FUND: bi('Reward funding', 'ลงเหรียญรางวัล'), SUBSIDY: bi('Launch subsidy', 'ระบบสมทบ'),
+  SURVEY_REWARD: bi('Survey reward', 'รางวัลตอบแบบสอบถาม'), ESCROW_REFUND: bi('Coin refund', 'คืนเหรียญ'),
   EVENT_REWARD: bi('Event check-in reward', 'รางวัลเช็กอิน กิจกรรม'), REWARD_REDEEM: bi('Reward redemption', 'แลกของรางวัล'),
-  REWARD_REFUND: bi('Redemption refund', 'คืน Coin จากการแลกของรางวัล'),
+  REWARD_REFUND: bi('Redemption refund', 'คืนเหรียญจากการแลกของรางวัล'),
 };
 export interface WalletEntry { id: string; delta: number; type: TxType; memo: string | null; createdAt: string }
 export interface WalletResponse { balance: number; earned: number; spent: number; entries: WalletEntry[]; nextBefore: string | null }
@@ -724,7 +724,7 @@ const rewardFields = {
   title: z.string().trim().min(2, bi('Name needs at least 2 characters', 'ชื่ออย่างน้อย 2 ตัวอักษร')).max(80),
   description: z.string().trim().min(1, bi('Add details and how to collect it', 'กรุณาใส่รายละเอียดและวิธีรับของ')).max(1000),
   imageUrl: optionalUrl,
-  cost: z.coerce.number().int().min(1, bi('Price must be at least 1 Coin', 'ราคาอย่างน้อย 1 Coin')).max(REWARD_RULES.MAX_COST),
+  cost: z.coerce.number().int().min(1, bi('Price must be at least 1 Coin', 'ราคาอย่างน้อย 1 เหรียญ')).max(REWARD_RULES.MAX_COST),
   stock: z.coerce.number().int().min(0, bi('Stock cannot be negative', 'จำนวนต้องไม่ติดลบ')).max(REWARD_RULES.MAX_STOCK),
   perUserLimit: z.coerce.number().int().min(1).max(REWARD_RULES.MAX_PER_USER),
   active: z.boolean(),
@@ -763,7 +763,7 @@ export interface AdminRedemptionItem extends RedemptionItem {
 // ───────────────────────── แอดมิน: เพิ่ม Coin ทดสอบ ─────────────────────────
 export const grantCoinSchema = z.object({
   email: z.string().trim().toLowerCase().email(bi('Invalid email address', 'อีเมลไม่ถูกต้อง')),
-  amount: z.coerce.number().int().min(1).max(100_000, bi('Up to 100,000 Coin at a time', 'เพิ่มได้ครั้งละไม่เกิน 100,000 Coin')),
+  amount: z.coerce.number().int().min(1).max(100_000, bi('Up to 100,000 Coin at a time', 'เพิ่มได้ครั้งละไม่เกิน 100,000 เหรียญ')),
   memo: z.string().trim().min(1, bi('Please give a reason', 'กรุณาใส่เหตุผล')).max(120),
 });
 export type GrantCoinInput = z.infer<typeof grantCoinSchema>;

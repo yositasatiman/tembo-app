@@ -7,7 +7,7 @@ import './globals.css';
 export async function generateMetadata(): Promise<Metadata> {
   const th = asLang((await cookies()).get(LANG_COOKIE)?.value) === 'th';
   return th
-    ? { title: 'TEMBO — แบบสอบถามงานวิจัยและกิจกรรมของชาว มช.', description: 'ศูนย์รวมแบบสอบถามงานวิจัยและกิจกรรมสำหรับชาว มช. ด้วยระบบ Coin หมุนเวียน' }
+    ? { title: 'TEMBO — แบบสอบถามงานวิจัยและกิจกรรมของชาว มช.', description: 'ศูนย์รวมแบบสอบถามงานวิจัยและกิจกรรมสำหรับชาว มช. ด้วยระบบเหรียญหมุนเวียน' }
     : { title: 'TEMBO — Research surveys and events for CMU', description: 'Find research surveys and campus events at Chiang Mai University, powered by Coin rewards.' };
 }
 

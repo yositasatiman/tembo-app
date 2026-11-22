@@ -28,7 +28,7 @@ export function SurveyCard({ s, reason, onToast }: { s: SurveySummary; reason?: 
     } catch (e) { setSaved(!next); onToast?.((e as Error).message); }
   }
   const full = s.status === 'OPEN' && s.payableResponses === 0;
-  const [en, th, cls] = full ? ['NEEDS COIN', 'รอเติม Coin', 'bg-coin-soft text-warning-foreground'] : STATUS[s.status] ?? [s.status, s.status, 'bg-muted'];
+  const [en, th, cls] = full ? ['NEEDS COIN', 'รอเติมเหรียญ', 'bg-coin-soft text-warning-foreground'] : STATUS[s.status] ?? [s.status, s.status, 'bg-muted'];
   const label = t(en, th);
   return (
     <article className="space-y-2 rounded-2xl bg-card p-3.5 shadow-card">
@@ -42,7 +42,7 @@ export function SurveyCard({ s, reason, onToast }: { s: SurveySummary; reason?: 
       <h3 className="text-lg leading-snug font-extrabold"><Link href={href} className="hover:text-primary">{s.title}</Link></h3>
       {s.description && <p className="line-clamp-2 text-[13px] text-muted-foreground">{s.description}</p>}
       <div className="flex flex-wrap gap-1.5 pt-0.5 text-xs">
-        <span className="rounded-xl bg-coin-soft px-2.5 py-1.5 font-extrabold">{s.rewardMode === 'DRAW' ? t(`Win ${s.rewardPerResponse} Coins`, `ลุ้น ${s.rewardPerResponse} Coin`) : t(`+ ${s.rewardPerResponse} Coins`, `+ ${s.rewardPerResponse} Coin`)}</span>
+        <span className="rounded-xl bg-coin-soft px-2.5 py-1.5 font-extrabold">{s.rewardMode === 'DRAW' ? t(`Win ${s.rewardPerResponse} Coins`, `ลุ้น ${s.rewardPerResponse} เหรียญ`) : t(`+ ${s.rewardPerResponse} Coins`, `+ ${s.rewardPerResponse} เหรียญ`)}</span>
         <span className="flex items-center gap-1 rounded-xl bg-lavender-soft px-2.5 py-1.5 text-muted-foreground"><Clock className="size-3.5" />{t(`${s.questionCount} questions`, `${s.questionCount} ข้อ`)}</span>
         <span className="flex items-center gap-1 rounded-xl bg-lavender-soft px-2.5 py-1.5 text-muted-foreground"><Users className="size-3.5" />{t(`${s.payableResponses} slots left`, `เหลือ ${s.payableResponses} ที่`)}</span>
       </div>

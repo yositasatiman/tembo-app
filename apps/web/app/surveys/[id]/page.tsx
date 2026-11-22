@@ -3,7 +3,7 @@ import { FormEvent, use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BarChart3, CalendarDays, CheckCircle2, Clock3, Coins, Eye, Gift, HandCoins, ListChecks, Lock, Shapes, Trophy, UserCheck, Users } from 'lucide-react';
 import { estMinutesLabel, facultyLabel, SURVEY_CATEGORIES, type SurveyDetail } from '@tembo/shared';
-import { useT } from '@/lib/i18n';
+import { useT, CoinWord } from '@/lib/i18n';
 import { api, ApiError, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
 import { ExternalOwnerSetup, ExternalRespond } from '@/components/survey/external';
@@ -51,7 +51,7 @@ function SurveyView({ id }: { id: string }) {
             <h1 className="text-xl leading-snug font-extrabold">{s.title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{s.ownerName ?? t('Anonymous', 'ไม่ระบุชื่อ')}{s.ownerFaculty && (lang === 'th' ? ` · คณะ${s.ownerFaculty}` : ` · ${p(facultyLabel(s.ownerFaculty))}`)}</p>
           </div>
-          <Badge tone="solid" className="px-3 py-1 text-sm">{s.rewardMode === 'DRAW' ? <><Gift />{t(`Win up to ${s.rewardPerResponse} Coin`, `ลุ้นสูงสุด ${s.rewardPerResponse} Coin`)}</> : <><Coins />{t(`${s.rewardPerResponse} Coin / person`, `${s.rewardPerResponse} Coin / คน`)}</>}</Badge>
+          <Badge tone="solid" className="px-3 py-1 text-sm">{s.rewardMode === 'DRAW' ? <><Gift />{t(`Win up to ${s.rewardPerResponse} Coin`, `ลุ้นสูงสุด ${s.rewardPerResponse} เหรียญ`)}</> : <><Coins />{t(`${s.rewardPerResponse} Coin / person`, `${s.rewardPerResponse} เหรียญ / คน`)}</>}</Badge>
         </div>
         {s.description && <p className="whitespace-pre-line text-sm leading-relaxed">{s.description}</p>}
         <div className="space-y-2">
@@ -83,7 +83,7 @@ function SurveyView({ id }: { id: string }) {
       {!s.isOwner && s.externalVerify === 'SCRIPT' && (s.hasResponded || (s.status !== 'CLOSED' && s.canRespond)) && <ScriptRespond s={s} reload={() => { load(); reloadMe(); }} />}
 
       {!s.isOwner && s.status !== 'CLOSED' && s.externalVerify === 'CODE' && s.canRespond && (
-        <ExternalRespond s={s} onDone={(r) => done(t(`Confirmed! You received ${r} Coin`, `ยืนยันการตอบแล้ว ได้รับ ${r} Coin`))} />
+        <ExternalRespond s={s} onDone={(r) => done(t(`Confirmed! You received ${r} Coin`, `ยืนยันการตอบแล้ว ได้รับ ${r} เหรียญ`))} />
       )}
 
       {s.rewardMode === 'DRAW' && <DrawCard s={s} />}
@@ -94,7 +94,7 @@ function SurveyView({ id }: { id: string }) {
           {s.hasResponded ? <p className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4" />{t('You have answered', 'คุณตอบแล้ว')}</p>
             : s.canRespond ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">{t(`${s.questionCount} questions · get ${s.rewardPerResponse} Coin instantly when you finish`, `${s.questionCount} ข้อ · ตอบครบรับ ${s.rewardPerResponse} Coin ทันที`)}</p>
+                <p className="text-sm text-muted-foreground">{t(`${s.questionCount} questions · get ${s.rewardPerResponse} Coin instantly when you finish`, `${s.questionCount} ข้อ · ตอบครบรับ ${s.rewardPerResponse} เหรียญทันที`)}</p>
                 <Link href={`/surveys/${s.id}/answer`} className={buttonCls('primary')}>{t('Start survey', 'เริ่มทำแบบสอบถาม')}</Link>
               </div>
             )
@@ -104,8 +104,8 @@ function SurveyView({ id }: { id: string }) {
 
       <Card className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-extrabold">{t('Reward Coin (escrow)', 'Coin รางวัลที่พักไว้')}</h3>
-          <span className="text-sm text-muted-foreground">{t('Total', 'รวม')} {s.targetPool.toLocaleString()} Coin</span>
+          <h3 className="font-extrabold">{t('Reward Coin (escrow)', 'เหรียญรางวัลที่พักไว้')}</h3>
+          <span className="text-sm text-muted-foreground">{t('Total', 'รวม')} {s.targetPool.toLocaleString()} <CoinWord /></span>
         </div>
         <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
           {seg.map((x) => x.v > 0 && <div key={x.label} className={x.cls} style={{ width: `${(x.v / total) * 100}%` }} title={`${x.label} ${x.v}`} />)}
@@ -114,7 +114,7 @@ function SurveyView({ id }: { id: string }) {
           {seg.filter((x) => x.v > 0).map((x) => <li key={x.label} className="flex items-center gap-1.5"><span className={`size-2 rounded-full ${x.cls}`} />{x.label} {x.v}</li>)}
           {s.remainingToFund > 0 && <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-muted-foreground/30" />{t('Still needed', 'ยังขาด')} {s.remainingToFund}</li>}
         </ul>
-        <p className="text-xs text-muted-foreground">{t(`${s.escrowBalance.toLocaleString()} Coin left in escrow`, `คงเหลือในกองรางวัล ${s.escrowBalance.toLocaleString()} Coin`)}{s.postFee ? t(` · posting fee ${s.postFee} Coin`, ` · ค่าโพสต์ ${s.postFee} Coin`) : t(' · first post free', ' · โพสต์แรกฟรี')}</p>
+        <p className="text-xs text-muted-foreground">{t(`${s.escrowBalance.toLocaleString()} Coin left in escrow`, `คงเหลือในกองรางวัล ${s.escrowBalance.toLocaleString()} เหรียญ`)}{s.postFee ? t(` · posting fee ${s.postFee} Coin`, ` · ค่าโพสต์ ${s.postFee} เหรียญ`) : t(' · first post free', ' · โพสต์แรกฟรี')}</p>
         {s.subsidyStatus === 'PENDING' && <Notice tone="warning">{t('Waiting for an admin to review your subsidy request. Responses are paused until then, but friends can still sponsor.', 'รอแอดมินตรวจการขอระบบสมทบ — ระหว่างนี้ยังไม่รับคำตอบ แต่เพื่อนช่วยสนับสนุนได้')}</Notice>}
         {s.subsidyStatus === 'REJECTED' && s.subsidyNote && <Notice>{t('Subsidy not approved', 'ไม่ได้รับการสมทบ')}: {s.subsidyNote}</Notice>}
       </Card>
@@ -145,20 +145,20 @@ function SponsorCard({ s, onDone }: { s: SurveyDetail; onDone: (m: string) => vo
   const [loading, setLoading] = useState(false);
   async function submit(e: FormEvent) {
     e.preventDefault(); setError(''); setLoading(true);
-    try { await post(`/surveys/${s.id}/sponsor`, { amount }); onDone(s.isOwner ? t(`Added ${amount} Coin`, `เติม ${amount} Coin แล้ว`) : t(`Sponsored ${amount} Coin`, `สนับสนุน ${amount} Coin แล้ว`)); }
+    try { await post(`/surveys/${s.id}/sponsor`, { amount }); onDone(s.isOwner ? t(`Added ${amount} Coin`, `เติม ${amount} เหรียญแล้ว`) : t(`Sponsored ${amount} Coin`, `สนับสนุน ${amount} เหรียญแล้ว`)); }
     catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }
   return (
     <Card>
       <form onSubmit={submit} className="space-y-3">
-        <h3 className="flex items-center gap-2 font-extrabold"><HandCoins className="size-4 text-primary" />{s.isOwner ? t('Add reward Coin', 'เติม Coin รางวัล') : t('Sponsor this survey', 'ช่วยสนับสนุน')}</h3>
+        <h3 className="flex items-center gap-2 font-extrabold"><HandCoins className="size-4 text-primary" />{s.isOwner ? t('Add reward Coin', 'เติมเหรียญรางวัล') : t('Sponsor this survey', 'ช่วยสนับสนุน')}</h3>
         <p className="text-xs text-muted-foreground">
-          {s.isOwner ? t('Let more people earn the reward', 'เพิ่มจำนวนคนที่รับรางวัลได้') : t('Add Coin to this survey’s rewards. Sponsors cannot answer it.', 'ลง Coin เข้ารางวัลของแบบสอบถามนี้ — ผู้สนับสนุนจะตอบแบบสอบถามนี้ไม่ได้')} · {t('leftovers are refunded proportionally when it closes', 'ที่เหลือตอนปิดรับคืนตามสัดส่วน')}
-          {s.myContribution > 0 && t(` · you have put in ${s.myContribution} Coin`, ` · คุณลงแล้ว ${s.myContribution} Coin`)}
+          {s.isOwner ? t('Let more people earn the reward', 'เพิ่มจำนวนคนที่รับรางวัลได้') : t('Add Coin to this survey’s rewards. Sponsors cannot answer it.', 'ลงเหรียญเข้ารางวัลของแบบสอบถามนี้ — ผู้สนับสนุนจะตอบแบบสอบถามนี้ไม่ได้')} · {t('leftovers are refunded proportionally when it closes', 'ที่เหลือตอนปิดรับคืนตามสัดส่วน')}
+          {s.myContribution > 0 && t(` · you have put in ${s.myContribution} Coin`, ` · คุณลงแล้ว ${s.myContribution} เหรียญ`)}
         </p>
         <div className="flex gap-2">
           <input type="number" className={inputCls} min={1} max={s.remainingToFund} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
-          <Button disabled={loading || amount < 1}>{t('Add Coin', 'ลง Coin')}</Button>
+          <Button disabled={loading || amount < 1}>{t('Add Coin', 'ลงเหรียญ')}</Button>
         </div>
         <ErrorText>{error}</ErrorText>
       </form>
@@ -170,9 +170,9 @@ function CloseCard({ s, onDone }: { s: SurveyDetail; onDone: (m: string) => void
   const { t } = useT();
   const [error, setError] = useState('');
   async function close() {
-    if (!window.confirm(t('Close this survey? Leftover Coin is refunded proportionally right away, and it cannot be reopened.', 'ปิดรับแบบสอบถามนี้? Coin ที่เหลือจะคืนตามสัดส่วนทันที และเปิดใหม่ไม่ได้'))) return;
+    if (!window.confirm(t('Close this survey? Leftover Coin is refunded proportionally right away, and it cannot be reopened.', 'ปิดรับแบบสอบถามนี้? เหรียญที่เหลือจะคืนตามสัดส่วนทันที และเปิดใหม่ไม่ได้'))) return;
     setError('');
-    try { await post(`/surveys/${s.id}/close`); onDone(t('Survey closed. Leftover Coin refunded.', 'ปิดรับแล้ว คืน Coin ที่เหลือเรียบร้อย')); }
+    try { await post(`/surveys/${s.id}/close`); onDone(t('Survey closed. Leftover Coin refunded.', 'ปิดรับแล้ว คืนเหรียญที่เหลือเรียบร้อย')); }
     catch (e) { setError((e as Error).message); }
   }
   return (
@@ -203,7 +203,7 @@ function DrawCard({ s }: { s: SurveyDetail }) {
           );
         })}
       </ul>
-      <p className="text-xs text-muted-foreground">{t('Everyone who submits has the same chance, so there is no need to rush. If there are fewer participants than prizes, the rest goes back to whoever funded it.', 'ทุกคนที่ส่งแบบสอบถามมีโอกาสเท่ากัน ไม่ต้องแข่งกันตอบเร็ว · ถ้าผู้ตอบน้อยกว่าจำนวนรางวัล รางวัลที่เหลือคืนผู้ลง Coin')}</p>
+      <p className="text-xs text-muted-foreground">{t('Everyone who submits has the same chance, so there is no need to rush. If there are fewer participants than prizes, the rest goes back to whoever funded it.', 'ทุกคนที่ส่งแบบสอบถามมีโอกาสเท่ากัน ไม่ต้องแข่งกันตอบเร็ว · ถ้าผู้ตอบน้อยกว่าจำนวนรางวัล รางวัลที่เหลือคืนผู้ลงเหรียญ')}</p>
     </Card>
   );
 }

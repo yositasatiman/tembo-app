@@ -3,7 +3,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import type { AdminRedemptionItem, RewardItem } from '@tembo/shared';
 import { api, patch, post } from '@/lib/api';
 import { Button, Card, ErrorText, Field, fmtDate, Input, inputCls, SectionHeader } from '@/components/ui';
-import { useT } from '@/lib/i18n';
+import { useT, CoinWord } from '@/lib/i18n';
 
 type AdminReward = RewardItem & { pending: number; fulfilled: number };
 const blank = { title: '', description: '', imageUrl: '', cost: '50', stock: '10', perUserLimit: '1' };
@@ -43,7 +43,7 @@ export function AdminRewards() {
   }
 
   async function decide(id: string, action: 'FULFILL' | 'CANCEL') {
-    const note = window.prompt(action === 'FULFILL' ? t('Message to the user (optional), e.g. where to pick it up', 'ข้อความถึงผู้ใช้ (ไม่บังคับ) เช่น จุดรับของ') : t('Reason for cancelling (the user will see this and get their Coin back)', 'เหตุผลที่ยกเลิก (ผู้ใช้จะเห็น และได้ Coin คืน)'));
+    const note = window.prompt(action === 'FULFILL' ? t('Message to the user (optional), e.g. where to pick it up', 'ข้อความถึงผู้ใช้ (ไม่บังคับ) เช่น จุดรับของ') : t('Reason for cancelling (the user will see this and get their Coin back)', 'เหตุผลที่ยกเลิก (ผู้ใช้จะเห็น และได้เหรียญคืน)'));
     if (note === null || (action === 'CANCEL' && !note.trim())) return;
     try { await post(`/admin/rewards/redemptions/${id}`, { action, note: note.trim() || undefined }); load(); }
     catch (e) { setError((e as Error).message); }
@@ -53,7 +53,7 @@ export function AdminRewards() {
 
   return (
     <div className="space-y-4">
-      <SectionHeader title={t('Rewards', 'ร้านรางวัล')} subtitle={t('Coin is deducted as soon as someone redeems. Mark it handed over when you give the item, or cancel to refund the Coin and restock.', 'ผู้ใช้แลกแล้ว Coin จะถูกหักทันที — กดส่งมอบเมื่อให้ของแล้ว หรือยกเลิกเพื่อคืน Coin และคืนสต็อก')}
+      <SectionHeader title={t('Rewards', 'ร้านรางวัล')} subtitle={t('Coin is deducted as soon as someone redeems. Mark it handed over when you give the item, or cancel to refund the Coin and restock.', 'ผู้ใช้แลกแล้วเหรียญจะถูกหักทันที — กดส่งมอบเมื่อให้ของแล้ว หรือยกเลิกเพื่อคืนเหรียญและคืนสต็อก')}
         action={!showForm && <Button size="sm" onClick={() => { setForm(blank); setEditing(null); setShowForm(true); }}>{t('Add reward', 'เพิ่มของรางวัล')}</Button>} />
       <ErrorText>{error}</ErrorText>
 
@@ -66,7 +66,7 @@ export function AdminRewards() {
             </Field>
             <Input label={t('Image link (optional)', 'ลิงก์รูปภาพ (ไม่บังคับ)')} type="url" placeholder="https://" value={form.imageUrl} onChange={set('imageUrl')} />
             <div className="grid grid-cols-3 gap-2">
-              <Input label={t('Price (Coin)', 'ราคา (Coin)')} type="number" min={1} required value={form.cost} onChange={set('cost')} />
+              <Input label={t('Price (Coin)', 'ราคา (เหรียญ)')} type="number" min={1} required value={form.cost} onChange={set('cost')} />
               <Input label={t('Stock', 'จำนวน')} type="number" min={0} required value={form.stock} onChange={set('stock')} />
               <Input label={t('Per person', 'สิทธิ์ต่อคน')} type="number" min={1} required value={form.perUserLimit} onChange={set('perUserLimit')} />
             </div>
@@ -84,11 +84,11 @@ export function AdminRewards() {
         <ul className="divide-y divide-border">
           {queue?.map((q) => (
             <li key={q.id} className="space-y-2 px-4 py-3">
-              <p className="text-sm font-bold">{q.reward.title} <span className="font-normal text-muted-foreground">· {q.cost} Coin</span></p>
+              <p className="text-sm font-bold">{q.reward.title} <span className="font-normal text-muted-foreground">· {q.cost} <CoinWord /></span></p>
               <p className="text-xs text-muted-foreground">{q.user.displayName} · {q.user.faculty} · {q.user.cmuEmail ?? q.user.email} · {fmtDate(q.createdAt)}</p>
               <div className="flex gap-2">
                 <Button size="sm" className="flex-1" onClick={() => decide(q.id, 'FULFILL')}>{t('Handed over', 'ส่งมอบแล้ว')}</Button>
-                <Button size="sm" variant="outline" className="flex-1" onClick={() => decide(q.id, 'CANCEL')}>{t('Cancel + refund', 'ยกเลิก + คืน Coin')}</Button>
+                <Button size="sm" variant="outline" className="flex-1" onClick={() => decide(q.id, 'CANCEL')}>{t('Cancel + refund', 'ยกเลิก + คืนเหรียญ')}</Button>
               </div>
             </li>
           ))}
@@ -103,7 +103,7 @@ export function AdminRewards() {
             <li key={r.id} className="flex items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold">{r.title}{!r.active && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{t('(off)', '(ปิดอยู่)')}</span>}</p>
-                <p className="text-xs text-muted-foreground">{r.cost} Coin · {t('left', 'เหลือ')} {r.stock} · {t('pending', 'รอส่ง')} {r.pending} · {t('handed over', 'ส่งแล้ว')} {r.fulfilled}</p>
+                <p className="text-xs text-muted-foreground">{r.cost} <CoinWord /> · {t('left', 'เหลือ')} {r.stock} · {t('pending', 'รอส่ง')} {r.pending} · {t('handed over', 'ส่งแล้ว')} {r.fulfilled}</p>
               </div>
               <Button size="sm" variant="ghost" onClick={() => edit(r)}>{t('Edit', 'แก้ไข')}</Button>
               <Button size="sm" variant="outline" onClick={() => toggle(r)}>{r.active ? t('Turn off', 'ปิด') : t('Turn on', 'เปิด')}</Button>

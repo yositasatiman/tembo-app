@@ -44,7 +44,7 @@ export class RewardsService {
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, include: { wallet: true } });
       if (REWARD_RULES.REQUIRE_CMU && !user.cmuVerifiedAt) throw new ForbiddenException(bi('Verify your @cmu.ac.th email before redeeming rewards', 'ยืนยันอีเมล @cmu.ac.th ก่อนแลกของรางวัล'));
-      if (!user.wallet) throw new BadRequestException(bi('Coin wallet not found', 'ไม่พบกระเป๋า Coin'));
+      if (!user.wallet) throw new BadRequestException(bi('Coin wallet not found', 'ไม่พบกระเป๋าเหรียญ'));
 
       // ล็อกแถวของรางวัล: กันแลกพร้อมกันจนสต็อกหรือโควตาต่อคนเกิน
       const [reward] = await tx.$queryRaw<{ id: string; title: string; cost: number; stock: number; perUserLimit: number; active: boolean }[]>`
@@ -130,14 +130,14 @@ export class RewardsService {
 
   private async cancel(tx: Tx, red: Awaited<ReturnType<RewardsService['lockPending']>>, note: string | null, byAdmin: boolean) {
     await this.ledger.post(tx, {
-      type: 'REWARD_REFUND', idempotencyKey: `reward:refund:${red.id}`, memo: bi(`Coin refund: ${red.reward.title}`, `คืน Coin: ${red.reward.title}`),
+      type: 'REWARD_REFUND', idempotencyKey: `reward:refund:${red.id}`, memo: bi(`Coin refund: ${red.reward.title}`, `คืนเหรียญ: ${red.reward.title}`),
       entries: [{ walletId: SYSTEM_WALLETS.BURN, delta: -red.cost }, { walletId: red.user.wallet!.id, delta: red.cost }],
     });
     await tx.reward.update({ where: { id: red.rewardId }, data: { stock: { increment: 1 } } });
     const done = await tx.rewardRedemption.update({ where: { id: red.id }, data: { status: 'CANCELLED', note, decidedAt: new Date() }, include: { reward: true } });
     if (byAdmin) {
       await this.notifications.notify(tx, [red.userId], {
-        type: 'REWARD_CANCELLED', title: bi(`Redemption of “${red.reward.title}” cancelled`, `ยกเลิกการแลก “${red.reward.title}”`), body: bi(`${note ? `${note} · ` : ''}${red.cost} Coin refunded`, `${note ? `${note} · ` : ''}คืน ${red.cost} Coin แล้ว`), link: '/rewards?tab=mine',
+        type: 'REWARD_CANCELLED', title: bi(`Redemption of “${red.reward.title}” cancelled`, `ยกเลิกการแลก “${red.reward.title}”`), body: bi(`${note ? `${note} · ` : ''}${red.cost} Coin refunded`, `${note ? `${note} · ` : ''}คืน ${red.cost} เหรียญแล้ว`), link: '/rewards?tab=mine',
       });
     }
     return done;

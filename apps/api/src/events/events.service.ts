@@ -86,7 +86,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
       await this.ledger.post(tx, {
         type: 'ESCROW_FUND', idempotencyKey: `event:${event.id}:fund`,
-        memo: bi(`Posting fee${q.rewardPool ? ' + reward Coin' : ''} for event "${event.title}" (held until admin review)`, `ค่าโพสต์${q.rewardPool ? ' + Coin รางวัล' : ''} กิจกรรม "${event.title}" (พักไว้รอแอดมินตรวจ)`),
+        memo: bi(`Posting fee${q.rewardPool ? ' + reward Coin' : ''} for event "${event.title}" (held until admin review)`, `ค่าโพสต์${q.rewardPool ? ' + เหรียญรางวัล' : ''} กิจกรรม "${event.title}" (พักไว้รอแอดมินตรวจ)`),
         entries: [{ walletId: wallet.id, delta: -q.total }, { walletId: escrow.id, delta: q.total }],
       });
       return event.id;
@@ -108,7 +108,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
     if (escrow.balance <= 0) return 0;
     const owner = await tx.wallet.findUniqueOrThrow({ where: { userId: e.organizerId } });
     await this.ledger.post(tx, {
-      type: 'ESCROW_REFUND', idempotencyKey: `event:${e.id}:refund`, memo: bi(`Coin refund from event "${e.title}" (${pick(reason, 'en')})`, `คืน Coin จากกิจกรรม "${e.title}" (${pick(reason, 'th')})`),
+      type: 'ESCROW_REFUND', idempotencyKey: `event:${e.id}:refund`, memo: bi(`Coin refund from event "${e.title}" (${pick(reason, 'en')})`, `คืนเหรียญจากกิจกรรม "${e.title}" (${pick(reason, 'th')})`),
       entries: [{ walletId: e.escrowWalletId, delta: -escrow.balance }, { walletId: owner.id, delta: escrow.balance }],
     });
     return escrow.balance;
@@ -147,8 +147,8 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
         data: { status: approve ? 'PUBLISHED' : 'REJECTED', reviewNote: note || null, reviewedAt: new Date() },
       });
       await this.notifications.notify(tx, [e.organizerId], approve
-        ? { type: 'EVENT_APPROVED', title: bi('Your event was approved', 'กิจกรรม ผ่านการตรวจแล้ว'), body: bi(`"${e.title}" is now in the feed`, `"${e.title}" ขึ้นฟีดแล้ว`), link: `/events/${id}` }
-        : { type: 'EVENT_REJECTED', title: bi('Your event was not approved', 'กิจกรรม ไม่ผ่านการตรวจ'), body: bi(`"${e.title}"${note ? ` — ${note}` : ''} · all Coin refunded`, `"${e.title}"${note ? ` — ${note}` : ''} · คืน Coin ทั้งหมดแล้ว`), link: `/events/${id}` });
+        ? { type: 'EVENT_APPROVED', title: bi('Your event was approved', 'กิจกรรมผ่านการตรวจแล้ว'), body: bi(`"${e.title}" is now in the feed`, `"${e.title}" ขึ้นฟีดแล้ว`), link: `/events/${id}` }
+        : { type: 'EVENT_REJECTED', title: bi('Your event was not approved', 'กิจกรรมไม่ผ่านการตรวจ'), body: bi(`"${e.title}"${note ? ` — ${note}` : ''} · all Coin refunded`, `"${e.title}"${note ? ` — ${note}` : ''} · คืนเหรียญทั้งหมดแล้ว`), link: `/events/${id}` });
       this.log.log(`event ${approve ? 'approved' : 'rejected'} event=${id} by admin=${adminId}`);
     });
   }
@@ -158,14 +158,14 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
   async cancelByOrganizer(userId: string, id: string) {
     await this.prisma.$transaction(async (tx) => {
       const e = await this.lock(tx, id);
-      if (e.organizerId !== userId) throw new ForbiddenException(bi('Only the organizer can cancel this event', 'เฉพาะผู้จัดที่ยกเลิก กิจกรรม ได้'));
+      if (e.organizerId !== userId) throw new ForbiddenException(bi('Only the organizer can cancel this event', 'เฉพาะผู้จัดที่ยกเลิก กิจกรรมได้'));
       if (e.status !== 'PENDING_REVIEW' && e.status !== 'PUBLISHED') throw new BadRequestException(bi('This event can no longer be cancelled', 'กิจกรรมนี้ยกเลิกไม่ได้แล้ว'));
       // ยกเลิกก่อนแอดมินตรวจ = ค่าโพสต์ยังอยู่ใน Escrow → คืนทั้งหมด / หลังอนุมัติ ค่าโพสต์ไม่คืน
       await this.refundEscrow(tx, e, bi('cancelled by organizer', 'ผู้จัดยกเลิก'));
       await tx.event.update({ where: { id }, data: { status: 'CANCELLED', cancelledAt: new Date() } });
       const regs = await tx.eventRegistration.findMany({ where: { eventId: id, status: { not: 'CANCELLED' } }, select: { userId: true } });
       await this.notifications.notify(tx, regs.map((r) => r.userId),
-        { type: 'EVENT_CANCELLED', title: bi('Event cancelled', 'กิจกรรม ถูกยกเลิก'), body: bi(`The organizer cancelled "${e.title}"`, `ผู้จัดยกเลิก "${e.title}" แล้ว`), link: `/events/${id}` });
+        { type: 'EVENT_CANCELLED', title: bi('Event cancelled', 'กิจกรรมถูกยกเลิก'), body: bi(`The organizer cancelled "${e.title}"`, `ผู้จัดยกเลิก "${e.title}" แล้ว`), link: `/events/${id}` });
     });
     return this.detail(id, { id: userId, role: 'MEMBER' });
   }
@@ -191,7 +191,7 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
           await this.refundEscrow(tx, e, bi('started before admin review', 'ถึงเวลาเริ่มก่อนแอดมินตรวจ'));
           await tx.event.update({ where: { id }, data: { status: 'REJECTED', reviewNote: bi('The event started before an admin reviewed it', 'ถึงเวลาเริ่มงานก่อนแอดมินตรวจ'), reviewedAt: now } });
           await this.notifications.notify(tx, [e.organizerId],
-            { type: 'EVENT_REJECTED', title: bi('Event expired before review', 'กิจกรรม หมดเวลาก่อนแอดมินตรวจ'), body: bi(`"${e.title}" · all Coin refunded`, `"${e.title}" · คืน Coin ทั้งหมดแล้ว`), link: `/events/${id}` });
+            { type: 'EVENT_REJECTED', title: bi('Event expired before review', 'กิจกรรมหมดเวลาก่อนแอดมินตรวจ'), body: bi(`"${e.title}" · all Coin refunded`, `"${e.title}" · คืนเหรียญทั้งหมดแล้ว`), link: `/events/${id}` });
         }
       });
     }
@@ -327,8 +327,8 @@ export class EventsService implements OnModuleInit, OnModuleDestroy {
       let note: string | null = null;
       if (e.rewardPerCheckIn > 0) {
         const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { cmuVerifiedAt: true } });
-        if (!user.cmuVerifiedAt) note = bi('Checked in, but no Coin because your @cmu.ac.th email is not verified yet', 'เช็กอินแล้ว แต่ยังไม่ได้รับ Coin เพราะยังไม่ได้ยืนยันอีเมล @cmu.ac.th');
-        else if (e.rewardedCount >= e.rewardSlots || e.escrowWallet.balance < e.rewardPerCheckIn) note = bi('Checked in, but this event has run out of reward Coin', 'เช็กอินแล้ว แต่ Coin รางวัลของงานนี้หมดแล้ว');
+        if (!user.cmuVerifiedAt) note = bi('Checked in, but no Coin because your @cmu.ac.th email is not verified yet', 'เช็กอินแล้ว แต่ยังไม่ได้รับเหรียญเพราะยังไม่ได้ยืนยันอีเมล @cmu.ac.th');
+        else if (e.rewardedCount >= e.rewardSlots || e.escrowWallet.balance < e.rewardPerCheckIn) note = bi('Checked in, but this event has run out of reward Coin', 'เช็กอินแล้ว แต่เหรียญรางวัลของงานนี้หมดแล้ว');
         else {
           await this.ledger.post(tx, {
             type: 'EVENT_REWARD', idempotencyKey: `event:${id}:checkin:${userId}`, memo: bi(`Check-in reward for event "${e.title}"`, `รางวัลเช็กอิน กิจกรรม "${e.title}"`),

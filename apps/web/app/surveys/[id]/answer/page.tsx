@@ -6,7 +6,7 @@ import { ArrowLeft, CheckCircle2, Coins, Eye } from 'lucide-react';
 import { validateAnswers, type Answers, type AnswerValue, type SurveyForm } from '@tembo/shared';
 import { api, ApiError, post } from '@/lib/api';
 import { AppShell, useMe } from '@/components/shell';
-import { useT } from '@/lib/i18n';
+import { useT, CoinWord } from '@/lib/i18n';
 import { AnswerField } from '@/components/survey/answer-field';
 import { Badge, Button, buttonCls, Card, ErrorText, Notice, Progress, Spinner } from '@/components/ui';
 
@@ -77,7 +77,7 @@ function AnswerForm({ id }: { id: string }) {
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
           <span className="flex size-14 items-center justify-center rounded-full bg-success-soft text-success"><CheckCircle2 className="size-8" /></span>
           <h1 className="text-xl font-extrabold">{t('Thanks for helping with this research!', 'ขอบคุณที่ช่วยงานวิจัย!')}</h1>
-          <p className="flex items-center gap-1.5 text-sm"><Coins className="size-4 text-primary" />{t('You received', 'ได้รับ')} <b>{done.reward} Coin</b> · {t('balance', 'คงเหลือ')} {done.balance.toLocaleString()} Coin</p>
+          <p className="flex items-center gap-1.5 text-sm"><Coins className="size-4 text-primary" />{t('You received', 'ได้รับ')} <b>{done.reward} <CoinWord /></b> · {t('balance', 'คงเหลือ')} {done.balance.toLocaleString()} <CoinWord /></p>
           <div className="mt-2 flex gap-2">
             <Link href="/surveys" className={buttonCls('primary', 'sm')}>{t('Answer another survey', 'ทำแบบสอบถามอื่นต่อ')}</Link>
             <Link href={`/surveys/${id}`} className={buttonCls('outline', 'sm')}>{t('Back to the survey', 'กลับไปหน้าแบบสอบถาม')}</Link>
@@ -93,7 +93,7 @@ function AnswerForm({ id }: { id: string }) {
       <Card className="space-y-3 p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="text-xl leading-snug font-extrabold">{form.title}</h1>
-          <Badge tone="solid" className="px-3 py-1 text-sm"><Coins />{form.rewardPerResponse} Coin</Badge>
+          <Badge tone="solid" className="px-3 py-1 text-sm"><Coins />{form.rewardPerResponse} <CoinWord /></Badge>
         </div>
         {form.description && <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{form.description}</p>}
         {isOwner
@@ -120,7 +120,7 @@ function AnswerForm({ id }: { id: string }) {
 
       <ErrorText>{error}</ErrorText>
       {!isOwner && (
-        <Button className="w-full" disabled={loading}>{loading ? t('Submitting…', 'กำลังส่ง…') : t(`Submit and get ${form.rewardPerResponse} Coin`, `ส่งคำตอบ รับ ${form.rewardPerResponse} Coin`)}</Button>
+        <Button className="w-full" disabled={loading}>{loading ? t('Submitting…', 'กำลังส่ง…') : t(`Submit and get ${form.rewardPerResponse} Coin`, `ส่งคำตอบ รับ ${form.rewardPerResponse} เหรียญ`)}</Button>
       )}
       {isOwner && <Button type="button" variant="outline" className="w-full" onClick={() => router.push(`/surveys/${id}/results`)}>{t('Go to results', 'ไปหน้าผลลัพธ์')}</Button>}
     </form>

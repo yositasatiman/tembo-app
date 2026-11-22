@@ -26,7 +26,7 @@ describe('แบบสอบถามลิงก์ภายนอก + รห�
     await agent.post('/surveys').send({ ...base, externalUrl: 'http://forms.gle/x' }).expect(400);
     await agent.post('/surveys').send({ ...base, externalQuestionCount: undefined }).expect(400);
     const r = await agent.post('/surveys').send({ ...base, externalQuestionCount: 25 }).expect(400);
-    expect(r.body.message).toMatch(/อย่างน้อย 6 Coin/);
+    expect(r.body.message).toMatch(/อย่างน้อย 6 เหรียญ/);
     await agent.post('/surveys').send({ ...base, questions: [{ type: 'SHORT_TEXT', title: 'x', required: true, options: [] }] }).expect(400);
   });
 

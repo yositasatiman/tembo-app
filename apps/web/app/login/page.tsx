@@ -47,12 +47,12 @@ export default function LoginPage() {
         <div className="relative space-y-6">
           <h1 className="text-4xl leading-tight font-extrabold">{t('Research surveys and campus events', 'แบบสอบถามงานวิจัยและกิจกรรม')}<br />{t('for CMU, all in one place', 'ของชาว มช. ในที่เดียว')}</h1>
           <ul className="space-y-3 text-sm opacity-90 [&_svg]:size-5">
-            <li className="flex items-center gap-3"><ClipboardList />{t('Answer research surveys and earn Coin instantly', 'ตอบแบบสอบถามงานวิจัย รับ Coin ทันที')}</li>
-            <li className="flex items-center gap-3"><Coins />{t('Use Coin to post your own survey and find participants faster', 'ใช้ Coin โพสต์แบบสอบถามของตัวเอง หาคนตอบได้เร็วขึ้น')}</li>
+            <li className="flex items-center gap-3"><ClipboardList />{t('Answer research surveys and earn Coin instantly', 'ตอบแบบสอบถามงานวิจัย รับเหรียญทันที')}</li>
+            <li className="flex items-center gap-3"><Coins />{t('Use Coin to post your own survey and find participants faster', 'ใช้เหรียญโพสต์แบบสอบถามของตัวเอง หาคนตอบได้เร็วขึ้น')}</li>
             <li className="flex items-center gap-3"><ShieldCheck />{t('Rewards are locked in escrow before a survey opens, so every payout is guaranteed', 'รางวัลถูกพักไว้ก่อนเปิดรับ จ่ายจริงทุกครั้ง')}</li>
           </ul>
         </div>
-        <p className="relative text-xs opacity-70">{t('Coin can only be used inside TEMBO. It is not real money.', 'Coin ใช้ภายในแพลตฟอร์มเท่านั้น ไม่ใช่เงินจริง')}</p>
+        <p className="relative text-xs opacity-70">{t('Coin can only be used inside TEMBO. It is not real money.', 'เหรียญใช้ภายในแพลตฟอร์มเท่านั้น ไม่ใช่เงินจริง')}</p>
       </div>
       <div className="flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md space-y-6">
@@ -71,7 +71,7 @@ export default function LoginPage() {
               onChange={(e) => setReferralCode(e.target.value.toUpperCase())} placeholder={t('e.g. AB12CD', 'เช่น AB12CD')} />
             <ErrorText>{error}</ErrorText>
             <Button className="w-full" disabled={loading || !email}>{loading ? t('Sending…', 'กำลังส่ง…') : t('Email me a one-time code', 'ส่งรหัส OTP ไปที่อีเมล')}</Button>
-            <p className="text-center text-xs text-muted-foreground">{t('Get 100 Coin when you sign up', 'สมัครครั้งแรกรับ 100 Coin')}</p>
+            <p className="text-center text-xs text-muted-foreground">{t('Get 100 Coin when you sign up', 'สมัครครั้งแรกรับ 100 เหรียญ')}</p>
           </form>
         ) : (
           <form onSubmit={verify} className="space-y-4">

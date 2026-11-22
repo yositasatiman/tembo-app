@@ -13,7 +13,7 @@ export function buildFormScript(endpoint: string, secret: string, lang: Lang) {
   const L = {
     header: th ? 'TEMBO — แจ้งผลการส่งฟอร์มไปที่ TEMBO อัตโนมัติ (อย่าแชร์โค้ดนี้ มีรหัสลับของแบบสอบถาม)' : 'TEMBO — reports form submissions to TEMBO automatically (do not share: contains your survey secret)',
     title: th ? 'รหัส TEMBO (ห้ามแก้)' : 'TEMBO code (do not edit)',
-    help: th ? 'TEMBO ใส่รหัสนี้ให้อัตโนมัติ เพื่อให้คุณได้รับ Coin หลังส่งฟอร์ม' : 'TEMBO fills this in for you so you get your Coin after submitting.',
+    help: th ? 'TEMBO ใส่รหัสนี้ให้อัตโนมัติ เพื่อให้คุณได้รับเหรียญหลังส่งฟอร์ม' : 'TEMBO fills this in for you so you get your Coin after submitting.',
     run: th ? 'กด Run ฟังก์ชันนี้ 1 ครั้งหลังวางโค้ด' : 'Run this function once after pasting the code',
     ok: th ? 'เชื่อม TEMBO สำเร็จ กลับไปที่ TEMBO ได้เลย' : 'Connected to TEMBO. You can go back to TEMBO now.',
     fail: th ? 'เชื่อมไม่สำเร็จ ลองกด Run อีกครั้ง' : 'Could not connect. Please press Run again.',

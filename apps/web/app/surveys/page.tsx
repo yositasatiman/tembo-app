@@ -59,7 +59,7 @@ function Surveys() {
 
   return (
     <div className="space-y-3">
-      <PageHeading title={t('Survey', 'แบบสอบถาม')} subtitle={t('Share your thoughts and get rewarded!', 'แบ่งปันความคิดเห็นแล้วรับ Coin')} create={{ href: '/surveys/new', label: t('Create', 'สร้าง') }} />
+      <PageHeading title={t('Survey', 'แบบสอบถาม')} subtitle={t('Share your thoughts and get rewarded!', 'แบ่งปันความคิดเห็นแล้วรับเหรียญ')} create={{ href: '/surveys/new', label: t('Create', 'สร้าง') }} />
       <FeedTabs active="survey" />
       <div role="tablist" aria-label={t('Filters', 'ตัวกรอง')} className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-0.5">
         {FILTERS.map((f) => <Chip key={f.key} active={filter === f.key} onClick={() => router.replace(f.key === 'all' ? '/surveys' : `/surveys?tab=${f.key}`)}>{t(f.en, f.th)}</Chip>)}
@@ -72,7 +72,7 @@ function Surveys() {
       {list === null ? <Spinner />
         : list.length === 0 ? (
           mine && drafts.length ? null : <EmptyState icon={<ClipboardList />} title={mine ? t('No surveys created yet.', 'คุณยังไม่ได้โพสต์แบบสอบถาม') : filter === 'saved' ? t('No saved surveys yet', 'ยังไม่ได้บันทึกแบบสอบถาม') : t('No open surveys yet', 'ยังไม่มีแบบสอบถามที่เปิดรับ')}
-            text={mine ? t('Post a research survey and reward participants with Coin.', 'โพสต์แบบสอบถามงานวิจัย แล้วให้ Coin เป็นรางวัลกับผู้ตอบ') : t('Be the first to post one!', 'เป็นคนแรกที่โพสต์เลย')}
+            text={mine ? t('Post a research survey and reward participants with Coin.', 'โพสต์แบบสอบถามงานวิจัย แล้วให้เหรียญเป็นรางวัลกับผู้ตอบ') : t('Be the first to post one!', 'เป็นคนแรกที่โพสต์เลย')}
             action={<Link href="/surveys/new" className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">{t('Post a survey', 'โพสต์แบบสอบถาม')}</Link>} />
         ) : <div className="space-y-2.5">{list.map((s) => <SurveyCard key={s.id} s={s} onToast={setToast} />)}</div>}
       {toast && <Toast onClose={() => setToast('')}>{toast}</Toast>}

@@ -76,7 +76,7 @@ export function ExternalRespond({ s, onDone }: { s: SurveyDetail; onDone: (rewar
     <Card className="space-y-4">
       <div>
         <h3 className="font-extrabold">{t('Take the survey', 'ตอบแบบสอบถาม')}</h3>
-        <p className="text-sm text-muted-foreground">{t(`${s.questionCount} questions · submit the form, then enter the confirmation code from its last page to get ${s.rewardPerResponse} Coin`, `${s.questionCount} ข้อ · ส่งฟอร์มแล้วกรอกรหัสยืนยันที่หน้าสุดท้าย รับ ${s.rewardPerResponse} Coin`)}</p>
+        <p className="text-sm text-muted-foreground">{t(`${s.questionCount} questions · submit the form, then enter the confirmation code from its last page to get ${s.rewardPerResponse} Coin`, `${s.questionCount} ข้อ · ส่งฟอร์มแล้วกรอกรหัสยืนยันที่หน้าสุดท้าย รับ ${s.rewardPerResponse} เหรียญ`)}</p>
       </div>
       <Step n={1} title={t('Open the survey and finish it', 'เปิดแบบสอบถามแล้วทำให้เสร็จ')} done={!!start}>
         <Button type="button" variant={start ? 'outline' : 'primary'} onClick={open}><ExternalLink />{start ? t('Open the survey again', 'เปิดแบบสอบถามอีกครั้ง') : t('Open the survey', 'เปิดแบบสอบถาม')}</Button>
@@ -118,7 +118,7 @@ export function ExternalRespond({ s, onDone }: { s: SurveyDetail; onDone: (rewar
       {phase === 'done' && (
         <Modal label={t('Reward received', 'ได้รับรางวัล')} onClose={() => onDone(reward)}>
           <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-coin-soft text-warning"><Coins className="size-7" /></span>
-          <p className="mt-4 text-xl font-extrabold">{t(`You got +${reward} Coin!`, `ได้รับ +${reward} Coin!`)}</p>
+          <p className="mt-4 text-xl font-extrabold">{t(`You got +${reward} Coin!`, `ได้รับ +${reward} เหรียญ!`)}</p>
           <p className="mt-2 text-sm text-muted-foreground">{t('Thanks for helping a fellow CMU researcher!', 'ขอบคุณที่ช่วยงานวิจัยของเพื่อนชาว มช.')}</p>
           <Button type="button" className="mt-5 w-full" onClick={() => onDone(reward)}>{t('Great!', 'เยี่ยมเลย')}</Button>
         </Modal>

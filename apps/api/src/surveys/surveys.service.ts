@@ -103,11 +103,11 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       const script = external && input.externalVerify === 'SCRIPT';
       if (input.ownerContribution < q.minOwnerContribution) {
         throw new BadRequestException(draw
-          ? bi(`A lucky draw needs the full ${q.minOwnerContribution} Coin up front`, `สุ่มจับรางวัลต้องลง Coin ครบ ${q.minOwnerContribution} ตั้งแต่แรก`)
-          : bi(`Put in at least ${q.minOwnerContribution} Coin (enough for 1 participant)`, `ต้องลง Coin อย่างน้อย ${q.minOwnerContribution} (พอจ่ายผู้ตอบ 1 คน)`));
+          ? bi(`A lucky draw needs the full ${q.minOwnerContribution} Coin up front`, `สุ่มจับรางวัลต้องลงเหรียญครบ ${q.minOwnerContribution} ตั้งแต่แรก`)
+          : bi(`Put in at least ${q.minOwnerContribution} Coin (enough for 1 participant)`, `ต้องลงเหรียญอย่างน้อย ${q.minOwnerContribution} (พอจ่ายผู้ตอบ 1 คน)`));
       }
       if (input.ownerContribution > q.maxOwnerContribution) {
-        throw new BadRequestException(bi(`You can put in up to ${q.maxOwnerContribution} Coin (the reward pool${q.subsidyAmount ? ' minus the subsidy' : ''})`, `ลง Coin ได้สูงสุด ${q.maxOwnerContribution} (ยอดรางวัลรวม${q.subsidyAmount ? ' หักส่วนที่ระบบสมทบ' : ''})`));
+        throw new BadRequestException(bi(`You can put in up to ${q.maxOwnerContribution} Coin (the reward pool${q.subsidyAmount ? ' minus the subsidy' : ''})`, `ลงเหรียญได้สูงสุด ${q.maxOwnerContribution} (ยอดรางวัลรวม${q.subsidyAmount ? ' หักส่วนที่ระบบสมทบ' : ''})`));
       }
 
       const escrow = await tx.wallet.create({ data: { kind: 'ESCROW' } });
@@ -166,7 +166,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
   private async fund(tx: Tx, survey: { id: string; title: string; escrowWalletId: string }, userId: string, walletId: string, amount: number, kind: 'OWNER' | 'SPONSOR') {
     await this.ledger.post(tx, {
       type: 'ESCROW_FUND', idempotencyKey: `survey:${survey.id}:fund:${randomUUID()}`,
-      memo: kind === 'OWNER' ? bi(`Reward Coin for survey "${survey.title}"`, `ลง Coin ในแบบสอบถาม "${survey.title}"`) : bi(`Sponsored survey "${survey.title}"`, `สนับสนุนแบบสอบถาม "${survey.title}"`),
+      memo: kind === 'OWNER' ? bi(`Reward Coin for survey "${survey.title}"`, `ลงเหรียญในแบบสอบถาม "${survey.title}"`) : bi(`Sponsored survey "${survey.title}"`, `สนับสนุนแบบสอบถาม "${survey.title}"`),
       entries: [{ walletId, delta: -amount }, { walletId: survey.escrowWalletId, delta: amount }],
     });
     await tx.surveyContribution.upsert({
@@ -201,13 +201,13 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       }
       const remaining = this.remainingToFund(s);
       if (remaining === 0) throw new BadRequestException(bi('The reward pool is already full', 'ยอดรางวัลครบแล้ว'));
-      if (amount > remaining) throw new BadRequestException(bi(`You can sponsor up to ${remaining} more Coin`, `สนับสนุนได้อีกไม่เกิน ${remaining} Coin`));
+      if (amount > remaining) throw new BadRequestException(bi(`You can sponsor up to ${remaining} more Coin`, `สนับสนุนได้อีกไม่เกิน ${remaining} เหรียญ`));
       const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
       await this.fund(tx, s, userId, wallet.id, amount, s.ownerId === userId ? 'OWNER' : 'SPONSOR');
       if (s.ownerId !== userId) {
         const who = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { displayName: true } });
         await this.notifications.notify(tx, [s.ownerId],
-          { type: 'SURVEY_SPONSORED', title: bi('A friend sponsored your survey', 'มีเพื่อนช่วยสนับสนุน'), body: bi(`${who.displayName ?? 'A friend'} added ${amount} Coin to "${s.title}"`, `${who.displayName ?? 'เพื่อน'} ลง ${amount} Coin ใน "${s.title}"`), link: `/surveys/${id}` });
+          { type: 'SURVEY_SPONSORED', title: bi('A friend sponsored your survey', 'มีเพื่อนช่วยสนับสนุน'), body: bi(`${who.displayName ?? 'A friend'} added ${amount} Coin to "${s.title}"`, `${who.displayName ?? 'เพื่อน'} ลง ${amount} เหรียญใน "${s.title}"`), link: `/surveys/${id}` });
       }
     });
     return this.detail(id, userId);
@@ -249,7 +249,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
         },
       });
       await this.notifications.notify(tx, [s.ownerId], approve
-        ? { type: 'SUBSIDY_APPROVED', title: bi('Subsidy approved', 'ได้รับระบบสมทบ'), body: bi(`TEMBO added ${s.subsidyAmount} Coin to "${s.title}". It is now open for responses.`, `TEMBO สมทบ ${s.subsidyAmount} Coin ให้ "${s.title}" แล้ว เปิดรับคำตอบได้`), link: `/surveys/${id}` }
+        ? { type: 'SUBSIDY_APPROVED', title: bi('Subsidy approved', 'ได้รับระบบสมทบ'), body: bi(`TEMBO added ${s.subsidyAmount} Coin to "${s.title}". It is now open for responses.`, `TEMBO สมทบ ${s.subsidyAmount} เหรียญให้ "${s.title}" แล้ว เปิดรับคำตอบได้`), link: `/surveys/${id}` }
         : { type: 'SUBSIDY_REJECTED', title: bi('Subsidy not approved', 'ไม่ได้รับระบบสมทบ'), body: bi(`"${s.title}"${note ? ` — ${note}` : ''} · open for responses as usual`, `"${s.title}"${note ? ` — ${note}` : ''} · เปิดรับคำตอบตามปกติ`), link: `/surveys/${id}` });
       this.log.log(`subsidy ${approve ? 'approved' : 'rejected'} survey=${id} by admin=${adminId}`);
     });
@@ -361,10 +361,10 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
     if (s.mode === 'IN_APP' && !(await db.surveyQuestion.count({ where: { surveyId: s.id } }))) return { reason: bi('This survey has no questions yet', 'แบบสอบถามนี้ยังไม่มีคำถาม (สร้างก่อนมีระบบคำถาม)') };
     if (s.webhookSecret && !s.webhookConnectedAt) return { reason: bi('The owner has not finished connecting the Google Form to TEMBO yet', 'ผู้โพสต์ยังเชื่อม Google Form กับ TEMBO ไม่เสร็จ') };
     const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { cmuVerifiedAt: true, faculty: true, studyYear: true } });
-    if (!user.cmuVerifiedAt) return { reason: bi('Verify your @cmu.ac.th email to earn Coin', 'ต้องยืนยันอีเมล @cmu.ac.th ก่อนจึงจะรับ Coin ได้') };
+    if (!user.cmuVerifiedAt) return { reason: bi('Verify your @cmu.ac.th email to earn Coin', 'ต้องยืนยันอีเมล @cmu.ac.th ก่อนจึงจะรับเหรียญได้') };
     if (s.eligibleFaculties.length && !(user.faculty && s.eligibleFaculties.includes(user.faculty))) return { reason: bi(`Open only to the Faculty of ${s.eligibleFaculties.map((f) => FACULTY_EN[f as keyof typeof FACULTY_EN] ?? f).join(', ')}`, `เปิดให้เฉพาะคณะ${s.eligibleFaculties.join(', ')}`) };
     if (s.eligibleYears.length && !(user.studyYear && s.eligibleYears.includes(user.studyYear))) return { reason: bi(`Open only to year ${s.eligibleYears.join(', ')} students`, `เปิดให้เฉพาะชั้นปีที่ ${s.eligibleYears.join(', ')}`) };
-    if (s.rewardMode === 'EQUAL' && s.escrowWallet.balance < s.rewardPerResponse) return { reason: bi('This survey has run out of reward Coin. Wait for the owner or a friend to add more.', 'Coin รางวัลของแบบสอบถามนี้หมดแล้ว รอผู้โพสต์หรือเพื่อนเติม') };
+    if (s.rewardMode === 'EQUAL' && s.escrowWallet.balance < s.rewardPerResponse) return { reason: bi('This survey has run out of reward Coin. Wait for the owner or a friend to add more.', 'เหรียญรางวัลของแบบสอบถามนี้หมดแล้ว รอผู้โพสต์หรือเพื่อนเติม') };
     return null;
   }
 
@@ -413,7 +413,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
         credit.set(wid, (credit.get(wid) ?? 0) + shares[i]);
       });
       await this.ledger.post(tx, {
-        type: 'ESCROW_REFUND', idempotencyKey: `survey:${id}:refund`, memo: bi(`Coin refund from survey "${s.title}"`, `คืน Coin จากแบบสอบถาม "${s.title}"`),
+        type: 'ESCROW_REFUND', idempotencyKey: `survey:${id}:refund`, memo: bi(`Coin refund from survey "${s.title}"`, `คืนเหรียญจากแบบสอบถาม "${s.title}"`),
         entries: [{ walletId: s.escrowWalletId, delta: -leftover }, ...[...credit].map(([walletId, delta]) => ({ walletId, delta }))],
       });
       for (const [i, c] of s.contributions.entries()) {
@@ -424,7 +424,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       type: 'SURVEY_CLOSED', title: bi('Your survey has closed', 'แบบสอบถามปิดรับแล้ว'),
       body: bi(
         `"${s.title}" got ${s.responsesCount}/${s.quota} responses${s.rewardMode === 'DRAW' ? ` · ${winners} winner(s) drawn` : ''}${leftover > 0 ? ' · leftover Coin refunded' : ''}`,
-        `"${s.title}" ได้ผู้ตอบ ${s.responsesCount}/${s.quota} คน${s.rewardMode === 'DRAW' ? ` · สุ่มผู้ได้รางวัลแล้ว ${winners} คน` : ''}${leftover > 0 ? ' · คืน Coin ที่เหลือตามสัดส่วนแล้ว' : ''}`,
+        `"${s.title}" ได้ผู้ตอบ ${s.responsesCount}/${s.quota} คน${s.rewardMode === 'DRAW' ? ` · สุ่มผู้ได้รางวัลแล้ว ${winners} คน` : ''}${leftover > 0 ? ' · คืนเหรียญที่เหลือตามสัดส่วนแล้ว' : ''}`,
       ), link: `/surveys/${id}/results`,
     });
     await tx.survey.update({
@@ -457,7 +457,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       });
       await tx.surveyResponse.update({ where: { id: e.id }, data: { reward: prize, prizeRank: i + 1 } });
       await this.notifications.notify(tx, [e.userId], {
-        type: 'SURVEY_PRIZE_WON', title: bi(`Congratulations! You won prize #${i + 1}`, `ยินดีด้วย! ได้รางวัลอันดับ ${i + 1}`), body: bi(`You received ${prize} Coin from "${s.title}"`, `ได้รับ ${prize} Coin จาก "${s.title}"`), link: `/surveys/${s.id}`,
+        type: 'SURVEY_PRIZE_WON', title: bi(`Congratulations! You won prize #${i + 1}`, `ยินดีด้วย! ได้รางวัลอันดับ ${i + 1}`), body: bi(`You received ${prize} Coin from "${s.title}"`, `ได้รับ ${prize} เหรียญจาก "${s.title}"`), link: `/surveys/${s.id}`,
       });
     }
     return picked.length;
@@ -476,7 +476,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       const first = await this.prisma.survey.updateMany({ where: { id, webhookConnectedAt: null }, data: { webhookConnectedAt: new Date() } });
       if (first.count) {
         await this.notifications.notify(this.prisma, [s.ownerId], {
-          type: 'SURVEY_CONNECTED', title: bi('Google Form connected', 'เชื่อม Google Form สำเร็จ'), body: bi(`"${s.title}" is now open. TEMBO will reward people automatically when they submit the form.`, `"${s.title}" เปิดให้ตอบแล้ว ระบบจะให้ Coin อัตโนมัติเมื่อมีคนส่งฟอร์ม`), link: `/surveys/${id}`,
+          type: 'SURVEY_CONNECTED', title: bi('Google Form connected', 'เชื่อม Google Form สำเร็จ'), body: bi(`"${s.title}" is now open. TEMBO will reward people automatically when they submit the form.`, `"${s.title}" เปิดให้ตอบแล้ว ระบบจะให้เหรียญอัตโนมัติเมื่อมีคนส่งฟอร์ม`), link: `/surveys/${id}`,
         });
       }
     }
@@ -495,7 +495,7 @@ export class SurveysService implements OnModuleInit, OnModuleDestroy {
       const paid = await this.pay(tx, sv, start.userId, {});
       await this.notifications.notify(tx, [start.userId], paid.entered
         ? { type: 'SURVEY_REWARDED', title: bi('You are in the lucky draw', 'ได้สิทธิ์ลุ้นรางวัลแล้ว'), body: bi(`"${sv.title}" submitted. Winners are drawn when the survey closes.`, `ส่ง "${sv.title}" เรียบร้อย ระบบจะสุ่มผู้ได้รางวัลตอนปิดแบบสอบถาม`), link: `/surveys/${id}` }
-        : { type: 'SURVEY_REWARDED', title: bi(`You received ${paid.reward} Coin`, `ได้รับ ${paid.reward} Coin`), body: bi(`"${sv.title}" submitted. Thanks for helping!`, `ส่ง "${sv.title}" เรียบร้อย ขอบคุณที่ช่วยตอบ`), link: `/surveys/${id}` });
+        : { type: 'SURVEY_REWARDED', title: bi(`You received ${paid.reward} Coin`, `ได้รับ ${paid.reward} เหรียญ`), body: bi(`"${sv.title}" submitted. Thanks for helping!`, `ส่ง "${sv.title}" เรียบร้อย ขอบคุณที่ช่วยตอบ`), link: `/surveys/${id}` });
       return { ok: true };
     });
   }

@@ -37,3 +37,9 @@ export function clientLang(): Lang {
   if (typeof document === 'undefined') return DEFAULT_LANG;
   return /(?:^|;\s*)tembo_lang=th/.test(document.cookie) ? 'th' : 'en';
 }
+
+/** คำว่า Coin ตามภาษา: อังกฤษ "Coin" / ไทย "เหรียญ" — ใช้ในข้อความ JSX ที่ไม่ได้อยู่ใน t() */
+export function CoinWord() {
+  const { t } = useT();
+  return <>{t('Coin', 'เหรียญ')}</>;
+}
