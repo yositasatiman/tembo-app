@@ -1,5 +1,5 @@
 'use client';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -101,6 +101,12 @@ function CmuVerifyCard({ verified, cmuEmail: verifiedEmail, onVerified }: { veri
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [wait, setWait] = useState(0);
+  useEffect(() => {
+    if (wait <= 0) return;
+    const h = setTimeout(() => setWait((w) => w - 1), 1000);
+    return () => clearTimeout(h);
+  }, [wait]);
 
   if (verified) {
     return (
@@ -110,11 +116,13 @@ function CmuVerifyCard({ verified, cmuEmail: verifiedEmail, onVerified }: { veri
       </Card>
     );
   }
-  async function send(e: FormEvent) {
-    e.preventDefault(); setError(''); setLoading(true);
-    try { await post('/me/cmu-email/request', { cmuEmail }); setSent(true); }
+  async function request() {
+    setError(''); setLoading(true);
+    try { await post('/me/cmu-email/request', { cmuEmail: cmuEmail.trim() }); setSent(true); setCode(''); setWait(60); }
     catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }
+  function send(e: FormEvent) { e.preventDefault(); void request(); }
+  function changeEmail() { setSent(false); setCode(''); setError(''); }
   async function verify(e: FormEvent) {
     e.preventDefault(); setError(''); setLoading(true);
     try { await post('/me/cmu-email/verify', { code }); onVerified(); }
@@ -133,11 +141,22 @@ function CmuVerifyCard({ verified, cmuEmail: verifiedEmail, onVerified }: { veri
         </form>
       ) : (
         <form onSubmit={verify} className="space-y-3">
-          <Notice>{t(`We sent a 6-digit code to ${cmuEmail}`, `ส่งรหัส 6 หลักไปที่ ${cmuEmail} แล้ว`)}</Notice>
+          <Notice>
+            <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <span>{t('We sent a 6-digit code to ', 'ส่งรหัส 6 หลักไปที่ ')}<b className="whitespace-nowrap">{cmuEmail}</b>{t('', ' แล้ว')}</span>
+              <button type="button" onClick={changeEmail} className="shrink-0 text-sm font-bold text-primary underline underline-offset-2">{t('Wrong email? Change it', 'อีเมลผิด? เปลี่ยนอีเมล')}</button>
+            </span>
+          </Notice>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1"><Input label={t('Verification code', 'รหัสยืนยัน')} inputMode="numeric" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} /></div>
             <Button disabled={loading || code.length !== 6}>{t('Verify', 'ยืนยัน')}</Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            {t("Didn't get it? Check your junk folder, or ", 'ไม่ได้รับรหัส? ลองดูในโฟลเดอร์จดหมายขยะ หรือ')}
+            {wait > 0
+              ? <span>{t(`resend in ${wait}s`, `ขอรหัสใหม่ได้ใน ${wait} วินาที`)}</span>
+              : <button type="button" onClick={() => void request()} disabled={loading} className="font-bold text-primary underline underline-offset-2">{t('resend the code', 'ส่งรหัสอีกครั้ง')}</button>}
+          </p>
         </form>
       )}
       <ErrorText>{error}</ErrorText>
